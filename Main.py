@@ -80,10 +80,11 @@ with tf.Session() as sess:
     # Epochs
     epoch = 1
     while epoch < epochs:
+        episode = 0
         episode_loss = 0
 
         # Episodes
-        for episode in range(episodes):
+        for _ in range(episodes):
             # Batch
             data = reader.iterate_batch(batch_dim)
             inputs = {question: data["question"], supports: data["supports"], answer: data["answer"],
@@ -93,6 +94,7 @@ with tf.Session() as sess:
             # Train
             _, episode_loss = sess.run([optimizer, loss], inputs)
             episode_loss += episode_loss
+            episode += 1
 
             # Epoch complete
             if reader.epoch_complete:
