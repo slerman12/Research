@@ -40,13 +40,13 @@ class MHDPA(snt.AbstractModule):
             entity_mask = tf.tile(entity_mask, [1, weights.shape[1], 1])  # [B, H, N]
             entity_mask = tf.expand_dims(entity_mask, axis=3)  # [B, H, N, 1]
             entity_mask = tf.tile(entity_mask, [1, 1, 1, num_entities])  # [B, H, N, N]
-            tf.math.logical_and(entity_mask, tf.transpose(entity_mask, [0, 1, 3, 2]))
+            entity_mask = tf.math.logical_and(entity_mask, tf.transpose(entity_mask, [0, 1, 3, 2]))
 
             indices = tf.where(entity_mask)
-            values = tf.gather_nd(weights, indices)
+            weights = tf.gather_nd(weights, indices)
             dense_shape = tf.cast(tf.shape(weights), tf.int64)
 
-            sparse_result = tf.sparse_softmax(tf.SparseTensor(indices, values, dense_shape))
+            sparse_result = tf.sparse_softmax(tf.SparseTensor(indices, weights, dense_shape))
             weights = tf.scatter_nd(sparse_result.indices, sparse_result.values, sparse_result.dense_shape)
             weights.set_shape(entity_mask.shape)
         else:
@@ -58,6 +58,8 @@ class MHDPA(snt.AbstractModule):
 
         # [B, H, N, V] -> [B, N, H, V]
         output_transpose = tf.transpose(output, [0, 2, 1, 3])
+
+        # TODO MLP
 
         # [B, N, H, V] -> [B, N, H * V]
         self._relations = snt.BatchFlatten(preserve_dims=2)(output_transpose)

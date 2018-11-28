@@ -25,7 +25,8 @@ s = tf.nn.embedding_lookup(words, supports)
 
 # LSTM representations
 with tf.variable_scope("LSTM_Question"):
-    lstm = tf.nn.rnn_cell.LSTMCell(64, forget_bias=2.0, use_peepholes=True, state_is_tuple=True)
+    question_embed_size = 64
+    lstm = tf.nn.rnn_cell.LSTMCell(question_embed_size, forget_bias=2.0, use_peepholes=True, state_is_tuple=True)
     _, state = tf.nn.dynamic_rnn(lstm, q, dtype=tf.float32, sequence_length=question_len)
     q = state.h
     q = snt.LayerNorm()(q)
@@ -51,8 +52,8 @@ supports_mask = tf.sequence_mask(support_num, reader.supports_max_num)
 mhdpa = MHDPA()
 relations = mhdpa(s, key_size=32, value_size=32, num_heads=1, entity_mask=supports_mask)
 
-# Aggregate relations
-mean_relation = tf.reduce_mean(relations, axis=1)
+# Aggregate relations  # TODO don't forget MLP
+mean_relation = tf.math.reduce_max(relations, axis=1)
 
 # Training loss
 logits = snt.Linear(reader.vocab_size)(mean_relation)
