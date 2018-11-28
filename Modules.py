@@ -20,7 +20,7 @@ class MHDPA(snt.AbstractModule):
         qkv_size = 2 * key_size + value_size
         total_size = qkv_size * num_heads  # Denote as F.
         qkv = snt.BatchApply(snt.Linear(total_size))(entities)
-        qkv = snt.BatchApply(snt.layer_norm.LayerNorm())(qkv)
+        qkv = snt.BatchApply(snt.LayerNorm())(qkv)
 
         num_entities = entities.get_shape().as_list()[1]  # Denoted as N.
 
