@@ -19,13 +19,13 @@ class MHDPA(snt.AbstractModule):
 
         qkv_size = 2 * key_size + value_size
         total_size = qkv_size * num_heads  # Denote as F.
-        qkv = snt.basic.BatchApply(snt.basic.Linear(total_size))(entities)
-        qkv = snt.basic.BatchApply(snt.layer_norm.LayerNorm())(qkv)
+        qkv = snt.BatchApply(snt.Linear(total_size))(entities)
+        qkv = snt.BatchApply(snt.layer_norm.LayerNorm())(qkv)
 
         num_entities = entities.get_shape().as_list()[1]  # Denoted as N.
 
         # [B, N, F] -> [B, N, H, F/H]
-        qkv_reshape = snt.basic.BatchReshape([num_entities, num_heads, qkv_size])(qkv)
+        qkv_reshape = snt.BatchReshape([num_entities, num_heads, qkv_size])(qkv)
 
         # [B, N, H, F/H] -> [B, H, N, F/H]
         qkv_transpose = tf.transpose(qkv_reshape, [0, 2, 1, 3])
@@ -60,7 +60,7 @@ class MHDPA(snt.AbstractModule):
         output_transpose = tf.transpose(output, [0, 2, 1, 3])
 
         # [B, N, H, V] -> [B, N, H * V]
-        self._relations = snt.basic.BatchFlatten(preserve_dims=2)(output_transpose)
+        self._relations = snt.BatchFlatten(preserve_dims=2)(output_transpose)
 
         return self._relations
 
