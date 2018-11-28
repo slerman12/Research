@@ -44,7 +44,7 @@ class MHDPA(snt.AbstractModule):
 
             indices = tf.where(entity_mask)
             weights = tf.gather_nd(weights, indices)
-            dense_shape = tf.cast(tf.shape(weights), tf.int64)
+            dense_shape = tf.cast(tf.shape(entity_mask), tf.int64)
 
             sparse_result = tf.sparse_softmax(tf.SparseTensor(indices, weights, dense_shape))
             weights = tf.scatter_nd(sparse_result.indices, sparse_result.values, sparse_result.dense_shape)
