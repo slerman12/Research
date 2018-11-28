@@ -53,6 +53,7 @@ mhdpa = MHDPA()
 relations = mhdpa(s, key_size=32, value_size=32, num_heads=1, entity_mask=supports_mask)
 
 # Aggregate relations  # TODO don't forget MLP
+# mean_relation = tf.math.reduce_mean(relations, axis=1)
 mean_relation = tf.math.reduce_max(relations, axis=1)
 
 # Training loss
@@ -69,7 +70,7 @@ optimizer = tf.train.AdamOptimizer().minimize(loss)
 
 # Training parameters
 epochs = 100000
-episodes = 1
+episodes = 10
 batch_dim = 100
 
 # Training
@@ -77,12 +78,12 @@ with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
 
     # Epochs
-    epoch = 0
+    epoch = 1
     while epoch < epochs:
         episode_loss = 0
 
         # Episodes
-        for _ in range(episodes):
+        for episode in range(episodes):
             # Batch
             data = reader.iterate_batch(batch_dim)
             inputs = {question: data["question"], supports: data["supports"], answer: data["answer"],
@@ -96,9 +97,17 @@ with tf.Session() as sess:
             # Epoch complete
             if reader.epoch_complete:
                 epoch += 1
+
+                # Accuracy on test tasks
+                data = reader.read_test(task=1)
+                inputs = {question: data["question"], supports: data["supports"], answer: data["answer"],
+                          question_len: data["question_len"], support_num: data["support_num"],
+                          support_pos: data["support_pos"], support_len: data["support_len"]}
+                print('Accuracy:', accuracy.eval())
+
                 break
 
-        # Accuracy
+        # Validation accuracy
         data = reader.read_valid(200)
         inputs = {question: data["question"], supports: data["supports"], answer: data["answer"],
                   question_len: data["question_len"], support_num: data["support_num"],
@@ -106,7 +115,5 @@ with tf.Session() as sess:
         validation_accuracy = accuracy.eval(inputs)
 
         # Print performance
-        print('Epoch', epoch, 'of', epochs, 'training loss:', episode_loss, 'validation accuracy:', validation_accuracy)
-
-    # Accuracy
-    # print('Accuracy:', accuracy.eval())  # TODO: read method for test data
+        print('Epoch', epoch, 'of', epochs, 'episodes', episode, 'training loss:', episode_loss,
+              'validation accuracy:', validation_accuracy)
