@@ -52,6 +52,7 @@ supports_mask = tf.sequence_mask(support_num, reader.supports_max_num)
 mhdpa = MHDPA()
 relations = mhdpa(s, key_size=32, value_size=32, num_heads=1, entity_mask=supports_mask)
 relations = snt.BatchApply(snt.nets.mlp.MLP(output_sizes=[32]))(relations)  # Linear layer
+relations = snt.BatchApply(snt.LayerNorm())(relations)  # Normalization
 
 # Aggregate relations
 aggregate_relation = tf.math.reduce_max(relations, axis=1)  # TODO: Compare to reduce_mean
@@ -106,7 +107,7 @@ with tf.Session() as sess:
                 inputs = {question: data["question"], supports: data["supports"], answer: data["answer"],
                           question_len: data["question_len"], support_num: data["support_num"],
                           support_pos: data["support_pos"], support_len: data["support_len"]}
-                print('Accuracy:', accuracy.eval(inputs))
+                print('Epoch Complete. Task 1 Test Accuracy:', accuracy.eval(inputs))
 
                 break
 
