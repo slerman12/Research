@@ -65,18 +65,18 @@ class Read:
 
     def read_valid(self, batch_size=None):
         if batch_size:
-            indices = random.sample(range(self.valid_stories_length - batch_size), batch_size)
+            indices = random.sample(range(self.valid_stories_length), batch_size)
             return {item: self.valid_stories[item][indices] for item in self.valid_stories}
         else:
-            return {item: self.valid_stories[item] for item in self.valid_stories}
+            return self.valid_stories
 
     def read_test(self, task, batch_size=None):
         task = task - 1
         if batch_size:
-            indices = random.sample((0, self.test_stories_length - batch_size), batch_size)
+            indices = random.sample(range(self.test_stories_length), batch_size)
             return {item: self.test_stories[task][item][indices] for item in self.test_stories[task]}
         else:
-            return {item: self.test_stories[task][item] for item in self.test_stories[task]}
+            return self.test_stories[task]
 
     def tokenize(self, sent):
         """Return the tokens of a sentence including punctuation.

@@ -34,6 +34,7 @@ class MHDPA(snt.AbstractModule):
         q *= key_size ** -0.5
         weights = tf.matmul(q, k, transpose_b=True)  # [B, H, N, N]
 
+        # TODO: gating with softmax? Or relu & divide by abs sum? Or shift by min negative? Or re-implement softmax?
         if entity_mask is not None:
             assert entity_mask.get_shape().as_list()[1] == num_entities
             entity_mask = tf.expand_dims(entity_mask, axis=1)  # [B, 1, N]

@@ -51,13 +51,13 @@ supports_mask = tf.sequence_mask(support_num, reader.supports_max_num)
 # MHDPA to get relations
 mhdpa = MHDPA()
 relations = mhdpa(s, key_size=32, value_size=32, num_heads=1, entity_mask=supports_mask)
+relations = snt.BatchApply(snt.nets.mlp.MLP(output_sizes=[32]))(relations)  # Linear layer
 
-# Aggregate relations  # TODO don't forget MLP
-# mean_relation = tf.math.reduce_mean(relations, axis=1)
-mean_relation = tf.math.reduce_max(relations, axis=1)
+# Aggregate relations
+aggregate_relation = tf.math.reduce_max(relations, axis=1)  # TODO: Compare to reduce_mean
 
 # Training loss
-logits = snt.Linear(reader.vocab_size)(mean_relation)
+logits = snt.Linear(reader.vocab_size)(aggregate_relation)
 loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=answer, logits=logits)
 loss = tf.reduce_mean(loss)
 
