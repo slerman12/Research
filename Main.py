@@ -99,6 +99,7 @@ with tf.Session() as sess:
             # Epoch complete
             if reader.epoch_complete:
                 epoch += 1
+                episode = 1
 
                 # Accuracy on test tasks
                 data = reader.read_test(task=1)
