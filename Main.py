@@ -118,5 +118,5 @@ with tf.Session() as sess:
         validation_accuracy = accuracy.eval(inputs)
 
         # Print performance
-        print('Epoch', epoch, 'of', epochs, 'episodes', episode, 'training loss:', episode_loss,
+        print('Epoch', epoch, 'of', epochs, 'episode', episode, 'training loss:', episode_loss,
               'validation accuracy:', validation_accuracy)
