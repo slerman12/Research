@@ -35,6 +35,7 @@ class MHDPA(snt.AbstractModule):
         weights = tf.matmul(q, k, transpose_b=True)  # [B, H, N, N]
 
         # TODO: gating with softmax? Or relu & divide by abs sum? Or shift by min negative? Or re-implement softmax?
+        original_entity_mask = entity_mask
         if entity_mask is not None:
             assert entity_mask.get_shape().as_list()[1] == num_entities
             entity_mask = tf.expand_dims(entity_mask, axis=1)  # [B, 1, N]
@@ -60,12 +61,25 @@ class MHDPA(snt.AbstractModule):
         # [B, H, N, V] -> [B, N, H, V]
         output_transpose = tf.transpose(output, [0, 2, 1, 3])
 
-        # TODO MLP
-
         # [B, N, H, V] -> [B, N, H * V]
-        self._relations = snt.BatchFlatten(preserve_dims=2)(output_transpose)
+        relations = snt.BatchFlatten(preserve_dims=2)(output_transpose)
 
-        return self._relations
+        relations = snt.BatchApply(snt.nets.mlp.MLP(output_sizes=[64, 64]))(relations)
+        relations = snt.BatchApply(snt.LayerNorm())(relations)  # Normalization
+
+        # Residual
+        # relations += s
+
+        # Apply mask
+        entities_mask = tf.cast(tf.tile(tf.expand_dims(original_entity_mask, 2), [1, 1, relations.shape[2]]), tf.float32)
+        relations *= entities_mask
+
+        self._relations = relations
+
+        # Aggregate relations
+        aggregate_relation = tf.math.reduce_max(relations, axis=1)  # TODO: Compare to reduce_mean
+
+        return aggregate_relation
 
     def distributional(self, top_k, sample=True):
         self._ensure_is_connected()
@@ -75,4 +89,10 @@ class MHDPA(snt.AbstractModule):
             else:
                 _, top_k_indices = tf.math.top_k(self._entity_weights, k=top_k)
                 return tf.gather_nd(self._relations, top_k_indices)
+
+    def get_entities(self):
+        return self._entities
+
+    def get_entity_mask(self):
+        return self._entity_mask
 

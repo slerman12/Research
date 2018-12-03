@@ -8,7 +8,7 @@ import random
 # Data handler
 class Read:
     def __init__(self, directory="tasks_1-20_v1-2/en-valid-10k", train_task="all", valid_task="all",
-                 test_task="separate"):
+                 test_task="separate", max_supporting=None):
         # Data
         self.vocab = []
         self.dictionary = {}
@@ -28,10 +28,12 @@ class Read:
         self.test_stories_length = 0
 
         # Load
-        self.load(directory=directory, train_task=train_task, valid_task=valid_task, test_task=test_task)
+        self.load(directory=directory, train_task=train_task, valid_task=valid_task, test_task=test_task,
+                  max_supporting=max_supporting)
 
         # Variable for iterating batches
         self.shuffled_training_indices = list(range(self.train_stories_length))
+        random.shuffle(self.shuffled_training_indices)
         self.batch_begin = 0
         self.epoch_complete = False
 
@@ -85,7 +87,7 @@ class Read:
         """
         return [x.strip() for x in re.findall(r"[\w']+|[.,!?;]", sent) if x.strip()]  # TODO: don't need punctuation
 
-    def parse_stories(self, lines, only_supporting=False):
+    def parse_stories(self, lines, only_supporting=False, max_supporting=None):
         """Parse stories provided in the bAbi tasks format
         If only_supporting is true, only the sentences
         that support the answer are kept.
@@ -108,6 +110,9 @@ class Read:
                 else:
                     # Provide all the substories
                     substory = [x for x in story if x]
+
+                if max_supporting is not None:
+                    substory = substory[-max_supporting:]
                 data.append((substory, q, a))
                 story.append('')
             else:
@@ -115,7 +120,7 @@ class Read:
                 story.append(sent)
         return data
 
-    def get_stories(self, f, unify_supporting=False, only_supporting=False):
+    def get_stories(self, f, unify_supporting=False, only_supporting=False, max_supporting=None):
         """Given a file name, read the file,
         retrieve the stories,
         and then convert the sentences into a single story.
@@ -123,7 +128,7 @@ class Read:
         any stories longer than max_length tokens will be discarded.
         """
         with open(f) as f:
-            data = self.parse_stories(f.readlines(), only_supporting=only_supporting)
+            data = self.parse_stories(f.readlines(), only_supporting=only_supporting, max_supporting=max_supporting)
 
         if unify_supporting:
             flatten = lambda data: reduce(lambda x, y: x + y, data)
@@ -132,7 +137,7 @@ class Read:
         return data
 
     def load(self, directory, train_task="all", valid_task="all", test_task="separate", unify_supporting=False,
-             only_supporting=False):
+             only_supporting=False, max_supporting=None):
         files = [os.path.join(directory, file) for file in os.listdir(directory)]
 
         print("Extracting stories for training on task:", train_task)
@@ -142,21 +147,21 @@ class Read:
         for file in files:
             if "train" in file:
                 if train_task == "all":
-                    self.train_stories += self.get_stories(file, unify_supporting, only_supporting)
+                    self.train_stories += self.get_stories(file, unify_supporting, only_supporting, max_supporting)
                 elif "qa{}_".format(train_task) in file:
-                    self.train_stories = self.get_stories(file, unify_supporting, only_supporting)
+                    self.train_stories = self.get_stories(file, unify_supporting, only_supporting, max_supporting)
             elif "test" in file:
                 if test_task == "all":
-                    self.test_stories += self.get_stories(file, unify_supporting, only_supporting)
+                    self.test_stories += self.get_stories(file, unify_supporting, only_supporting, max_supporting)
                 if test_task == "separate":
-                    self.test_stories.append(self.get_stories(file, unify_supporting, only_supporting))
+                    self.test_stories.append(self.get_stories(file, unify_supporting, only_supporting, max_supporting))
                 elif "qa{}_".format(test_task) in file:
-                    self.test_stories = self.get_stories(file, unify_supporting, only_supporting)
+                    self.test_stories = self.get_stories(file, unify_supporting, only_supporting, max_supporting)
             elif "valid" in file:
                 if valid_task == "all":
-                    self.valid_stories += self.get_stories(file, unify_supporting, only_supporting)
+                    self.valid_stories += self.get_stories(file, unify_supporting, only_supporting, max_supporting)
                 elif "qa{}_".format(valid_task) in file:
-                    self.valid_stories = self.get_stories(file, unify_supporting, only_supporting)
+                    self.valid_stories = self.get_stories(file, unify_supporting, only_supporting, max_supporting)
 
         # Set data metrics
         all_data = self.train_stories + self.test_stories + self.valid_stories if test_task != "separate" \
