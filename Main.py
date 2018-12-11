@@ -143,7 +143,7 @@ with tf.Session() as sess:
     # Epochs
     epoch = 1
     episode = 1
-    while epoch < args.epochs:
+    while epoch <= args.epochs:
         episode_loss = 0
 
         # Episodes
