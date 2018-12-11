@@ -70,14 +70,13 @@ if args.call_sweep:
 
     def slurm_script(n):
         return r"""#!/bin/bash
-#SBATCH -J %a_{}
 #SBATCH -p gpu
 #SBATCH --gres=gpu:1
-#SBATCH -t 5-00:00:00 -o {}/{}.%a.{}
+#SBATCH -t 5-00:00:00 -o {}/{}.%a.{} -J %a_{}
 #SBATCH --array=1-{}
 module load anaconda3/5.2.0b
 python {} -name_suffix {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
-""".format(n, path + "/eval", log_name, n, len(sweep), args.program, n, in_file_name)
+""".format(path + "/eval", log_name, n + 1, n + 1, len(sweep), args.program, n + 1, in_file_name)
 
 
     # Create a job for each run, each consisting of all of the params (e.g. for mean and st.d)
@@ -96,22 +95,22 @@ def evaluate_babi():
     for param_set in range(len(sweep)):
         results = []
         for r in range(args.num_runs):
-            with open("{}/{}.{}.{}".format(path + "/eval", log_name, param_set, r)) as f:
+            with open("{}/{}.{}.{}".format(path + "/eval", log_name, param_set + 1, r + 1)) as f:
                 line = f.readlines()
                 line = line[-1]
-                print(param_set, r)
+                print(param_set + 1, r + 1)
                 results += [float(i) for i in line.split(' ')]
         for task in range(20):
-            stats["param_set_{}".format(param_set)]["task_{}".format(task)]["mean"] = \
+            stats["param_set_{}".format(param_set + 1)]["task_{}".format(task)]["mean"] = \
                 np.mean([result[task] for result in results])
-            stats["param_set_{}".format(param_set)]["task_{}".format(task)]["std"] = \
+            stats["param_set_{}".format(param_set + 1)]["task_{}".format(task)]["std"] = \
                 np.std([result[task] for result in results])
-            stats["param_set_{}".format(param_set)]["all_tasks_mean"] = \
+            stats["param_set_{}".format(param_set + 1)]["all_tasks_mean"] = \
                 np.mean([v for v in result for result in results])
-            stats["param_set_{}".format(param_set)]["all_tasks_std"] = \
+            stats["param_set_{}".format(param_set + 1)]["all_tasks_std"] = \
                 np.std([v for v in result for result in results])
             with open("in", "w") as f:
-                stats["param_set_{}".format(param_set)]["params"] = f.readlines()[param_set]
+                stats["param_set_{}".format(param_set + 1)]["params"] = f.readlines()[param_set + 1]
     return stats
 
 
