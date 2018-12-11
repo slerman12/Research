@@ -70,7 +70,7 @@ if args.call_sweep:
 
     def slurm_script(n):
         return r"""#!/bin/bash
-#SBATCH -J %a.{}
+#SBATCH -J %a_{}
 #SBATCH -p gpu
 #SBATCH --gres=gpu:1
 #SBATCH -t 5-00:00:00 -o {}/{}.%a.{}
