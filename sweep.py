@@ -102,6 +102,7 @@ def evaluate_babi():
                 print([i for i in line.split(' ')])
                 results.append([float(i) for i in line.split(' ')[:-1]])
         for task in range(20):
+            stats["param_set_{}".format(param_set + 1)] = {}
             stats["param_set_{}".format(param_set + 1)]["task_{}".format(task)]["mean"] = \
                 np.mean([result[task] for result in results])
             stats["param_set_{}".format(param_set + 1)]["task_{}".format(task)]["std"] = \
