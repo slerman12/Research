@@ -3,7 +3,6 @@ import json
 import os
 import subprocess
 import time
-
 import numpy as np
 
 
@@ -19,26 +18,33 @@ def str2bool(v):
 # Arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('-call_sweep', type=str2bool, default=True)
-parser.add_argument('-program', type=str, default="Main.py")
+parser.add_argument('-program', type=str, default="Run.py")
 parser.add_argument('-num_runs', type=int, default=5)
 parser.add_argument('-test_sweep', type=str2bool, default=False)
 args = parser.parse_args()
 
 sweep = []
-sweep.extend([{"distributional": True, "top_k": top_k, "sample": sam, "aggregate_method": agg, "slurm": True}
-              for top_k in range(1, 21) for sam in [True, False] for agg in ["max", "mean", "concat"]])
-sweep.extend([{"distributional": True, "top_k": top_k, "uniform_sample": True, "aggregate_method": agg, "slurm": True}
-              for top_k in range(1, 21) for agg in ["max", "mean", "concat"]])
-sweep.extend([{"distributional": False, "top_k": top_k, "aggregate_method": agg, "slurm": True}
-              for top_k in range(1, 21) for agg in ["max", "mean", "concat"]])
+# sweep.extend([{"distributional": True, "top_k": top_k, "sample": sam, "aggregate_method": agg, "slurm": True}
+#               for top_k in range(1, 21) for sam in [True, False] for agg in ["max", "mean", "concat"]])
+# sweep.extend([{"distributional": True, "top_k": top_k, "uniform_sample": True, "aggregate_method": agg, "slurm": True}
+#               for top_k in range(1, 21) for agg in ["max", "mean", "concat"]])
+# sweep.extend([{"distributional": False, "top_k": top_k, "aggregate_method": agg, "slurm": True}
+#               for top_k in range(1, 21) for agg in ["max", "mean", "concat"]])
 
-# TODO delete, testing
-if args.test_sweep:
-    for x in sweep:
+sweep.extend([{"top_k": top_k, "aggregate_method": "concat", "slurm": True}
+              for top_k in [1, 2, 3, 5, 7, 10, 15] for sam in [True, False]])
+sweep.extend([{"top_k": top_k, "uniform_sample": True, "aggregate_method": "concat", "slurm": True}
+              for top_k in [1, 2, 3, 5, 7, 10, 15]])
+sweep.extend([{"distributional": False, "aggregate_method": agg, "slurm": True}
+              for agg in ["max", "mean", "concat"]])
+for x in sweep:
+    if args.test_sweep:
         x["epochs"] = 1
+    else:
+        x["epochs"] = 2000
 
 log_name = "log"
-stats_file_name = "stats.txt"
+stats_file_name = "stats"
 path = os.getcwd()
 
 # Whether to run or just evaluate
@@ -49,11 +55,12 @@ if args.call_sweep:
     open(in_file_name, 'w').close()
     open(slurm_script_name, 'w').close()
 
-    for parameterization in sweep:
+    for i, parameterization in enumerate(sweep):
         with open(in_file_name, "a") as file:
             params = ""
             for key in parameterization:
                 params += '-{} {} '.format(key, parameterization[key])
+            params += '-{} {} '.format("name", i)
             file.write(params + '\n')
 
     if not os.path.exists(path + "/eval"):
@@ -67,8 +74,8 @@ if args.call_sweep:
 #SBATCH -t 5-00:00:00 -o {}/{}.%a.{}
 #SBATCH --array=0-{}
 module load anaconda3/5.2.0b
-python {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
-""".format(path + "/eval", log_name, n, len(sweep) - 1, args.program, in_file_name)
+python {} -name_suffix {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
+""".format(path + "/eval", log_name, n, len(sweep) - 1, args.program, n, in_file_name)
 
 
     # Create a job for each run, each consisting of all of the params (e.g. for mean and st.d)

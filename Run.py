@@ -1,8 +1,8 @@
-import os
 import tensorflow as tf
 import sonnet as snt
+from Brains import MHDPA
 import bAbI
-from Modules import MHDPA
+import os
 import argparse
 
 
@@ -17,6 +17,9 @@ def str2bool(v):
 
 # Arguments
 parser = argparse.ArgumentParser()
+parser.add_argument('-saving_logging_directory', type=str, default='saving_logging')
+parser.add_argument('-name', type=str, default='name')
+parser.add_argument('-name_suffix', type=str, default='name_suffix')
 parser.add_argument('-max_supporting', type=int, default=20)
 parser.add_argument('-word_dim', type=int, default=20)
 parser.add_argument('-question_embed_size', type=int, default=64)
@@ -35,6 +38,7 @@ parser.add_argument('-logging', type=str2bool, default=False)
 parser.add_argument('-saving', type=str2bool, default=True)
 parser.add_argument('-slurm', type=str2bool, default=False)
 args = parser.parse_args()
+print(args)
 
 # Data reader
 reader = bAbI.Read(max_supporting=args.max_supporting)
@@ -126,19 +130,18 @@ with tf.Session() as sess:
     sess.run(init)
 
     # TensorBoard
-    directory_name = "directory"
     path = os.getcwd()
-    log_directory = path + "/" + directory_name + "/"
+    saving_logging_directory = path + "/" + args.saving_logging_directory + "/"
     logs = tf.summary.merge_all()
-    writer = tf.summary.FileWriter(log_directory + "Logs/", sess.graph)
+    writer = tf.summary.FileWriter(saving_logging_directory + "Logs/" + args.name + "/" + args.name_suffix + "/", sess.graph)
 
     # Restore any previously saved
     if args.saving:
-        if not os.path.exists(log_directory + "Saved/"):
-            os.makedirs(log_directory + "Saved/")
-        if tf.train.checkpoint_exists(log_directory + "Saved/model"):
+        if not os.path.exists(saving_logging_directory + "Saved/" + args.name + "/"):
+            os.makedirs(saving_logging_directory + "Saved/" + args.name + "/")
+        if tf.train.checkpoint_exists(saving_logging_directory + "Saved/" + args.name + "/" + args.name_suffix):
             # NOTE: for some reason continuing training does not work after restoring
-            saver.restore(sess, log_directory + "Saved/model")
+            saver.restore(sess, saving_logging_directory + "Saved/" + args.name + "/" + args.name_suffix)
 
     # Epochs
     epoch = 1
@@ -164,7 +167,7 @@ with tf.Session() as sess:
 
             # Epoch complete
             if reader.epoch_complete:
-
+                print("Epoch {} of {} complete.".format(epoch, args.epochs))
                 epoch += 1
                 episode = 1
                 break
@@ -181,9 +184,10 @@ with tf.Session() as sess:
         # Save best model
         if args.saving:
             if max_acc > max_validation_accuracy:
+                print("New max accuracy: {}".format(max_acc))
                 max_validation_accuracy = max_acc
                 if max_validation_accuracy > 0:
-                    saver.save(sess, log_directory + "Saved/model")
+                    saver.save(sess, saving_logging_directory + "Saved/" + args.name + "/" + args.name_suffix)
 
         # Print performance
         if not args.slurm:
@@ -193,6 +197,7 @@ with tf.Session() as sess:
     # TODO: decrease learning rate, max grad norm, sysargs, slurm
 
     # Accuracy on test tasks
+    saver.restore(sess, saving_logging_directory + "Saved/" + args.name + "/" + args.name_suffix)
     accuracies = ""
     for task in range(1, 21):
         data = reader.read_test(task=task)
