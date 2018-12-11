@@ -16,7 +16,8 @@ sweep.extend([{"distributional": True, "top_k": top_k, "sample": sam, "aggregate
               for top_k in range(1, 21) for sam in [True, False] for agg in ["max", "mean", "concat"]])
 sweep.extend([{"distributional": True, "top_k": top_k, "uniform_sample": True, "aggregate_method": agg, "slurm": True}
               for top_k in range(1, 21) for agg in ["max", "mean", "concat"]])
-sweep.extend([{"distributional": False, "aggregate_method": agg, "slurm": True} for agg in ["max", "mean", "concat"]])
+sweep.extend([{"distributional": False, "top_k": top_k, "aggregate_method": agg, "slurm": True}
+              for top_k in range(1, 21) for agg in ["max", "mean", "concat"]])
 
 # TODO delete, testing
 # for x in sweep:
