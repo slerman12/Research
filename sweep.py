@@ -2,6 +2,8 @@ import argparse
 import json
 import os
 import subprocess
+import time
+
 import numpy as np
 
 
@@ -19,6 +21,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-call_sweep', type=str2bool, default=True)
 parser.add_argument('-program', type=str, default="Main.py")
 parser.add_argument('-num_runs', type=int, default=10)
+parser.add_argument('-test_sweep', type=str2bool, default=False)
 args = parser.parse_args()
 
 sweep = []
@@ -30,8 +33,9 @@ sweep.extend([{"distributional": False, "top_k": top_k, "aggregate_method": agg,
               for top_k in range(1, 21) for agg in ["max", "mean", "concat"]])
 
 # TODO delete, testing
-# for x in sweep:
-#     x["epochs"] = 1
+if args.test_sweep:
+    for x in sweep:
+        x["epochs"] = 1
 
 log_name = "log"
 stats_file_name = "stats.txt"
@@ -65,7 +69,7 @@ if args.call_sweep:
 #SBATCH -t 5-00:00:00 -o {}/{}.%a.{}
 #SBATCH --array=0-{}
 module load anaconda3/5.2.0b
-{} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
+python {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
 """.format(path + "/eval", log_name, n, len(sweep) - 1, args.program, in_file_name)
 
 
@@ -76,6 +80,7 @@ module load anaconda3/5.2.0b
             file.write(slurm_script(run))
         # processes.append(subprocess.call(['sbatch', slurm_script_name], shell=True))
         subprocess.call(['sbatch {}'.format(slurm_script_name)], shell=True)
+        time.sleep(5)
     # wait = [p.wait() for p in processes]
 
 
