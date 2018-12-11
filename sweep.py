@@ -19,7 +19,8 @@ def str2bool(v):
 parser = argparse.ArgumentParser()
 parser.add_argument('-call_sweep', type=str2bool, default=True)
 parser.add_argument('-program', type=str, default="Run.py")
-parser.add_argument('-num_runs', type=int, default=5)
+parser.add_argument('-num_runs', type=int, default=10)
+parser.add_argument('-num_epochs', type=int, default=100000)
 parser.add_argument('-test_sweep', type=str2bool, default=False)
 args = parser.parse_args()
 
@@ -41,7 +42,7 @@ for x in sweep:
     if args.test_sweep:
         x["epochs"] = 1
     else:
-        x["epochs"] = 2000
+        x["epochs"] = args.num_epochs
 
 log_name = "log"
 stats_file_name = "stats"
@@ -69,13 +70,14 @@ if args.call_sweep:
 
     def slurm_script(n):
         return r"""#!/bin/bash
+#SBATCH -J %a.{}
 #SBATCH -p gpu
 #SBATCH --gres=gpu:1
 #SBATCH -t 5-00:00:00 -o {}/{}.%a.{}
 #SBATCH --array=0-{}
 module load anaconda3/5.2.0b
 python {} -name_suffix {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
-""".format(path + "/eval", log_name, n, len(sweep) - 1, args.program, n, in_file_name)
+""".format(n, path + "/eval", log_name, n, len(sweep) - 1, args.program, n, in_file_name)
 
 
     # Create a job for each run, each consisting of all of the params (e.g. for mean and st.d)
