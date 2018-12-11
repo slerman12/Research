@@ -1,0 +1,151 @@
+#!/bin/bash
+#SBATCH -J po_rp_nr_me
+#SBATCH -o RP_Pong__%j
+#SBATCH --mem-per-cpu=2gb
+#SBATCH -t 5-00:00:00
+#SBATCH -n 1
+#SBATCH -c 1
+module load anaconda/5.1.0
+python Run_Pong_Rand_Proj.py
+
+Parameter sweep:
+
+#!/bin/bash
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1
+#SBATCH -t 5-00:00:00 -o log.%a
+#SBATCH --array=1-100
+module load anaconda3/5.2.0b
+Main.py `awk "NR==$SLURM_ARRAY_TASK_ID" in`
+
+'in' file looks like:
+
+-learning_rate 0.01 -episodes 10000
+-learning_rate 0.01 -episodes 20000
+-learning_rate 0.01 -episodes 30000
+-learning_rate 0.02 -episodes 10000
+-learning_rate 0.02 -episodes 20000
+-learning_rate 0.02 -episodes 30000
+
+
+Many options can be selected using either a long name such as --partition or a short name -p.
+You can give several options on a single line, or put each one on a separate line. You can put the options
+in your scripts by preceding with #SBATCH, or give them as command-line arguments to the sbatch command.
+
+#SBATCH -p standard           partition or queue to run
+#SBATCH -c 4                  number of cpus per task, for a multithreaded job
+#SBATCH -n 6                  number of tasks, for an MPI job
+#SBATCH --mem-per-cpu=1gb     memory per core required
+#SBATCH -t 0-01:00:00         walltime D-HH:MM:SS (here, one hour)
+#SBATCH -J my_job             Name of your job
+#SBATCH -o my_output%j        File for standard out - here the %j will be replaced by the JobID
+#SBATCH -e my_error%j         File for standard error.  If not specified will go to same file as standard out.
+#SBATCH --mail-type=begin     When to send e-mails pertaining to your job.  Can be any of [begin, end, fail, requeue, or all]
+#SBATCH --mail-user=email     use another email address instead of the one in your ~/.forward file
+#SBATCH --gres=gpu:1          requests 1 or 2 (--gres=gpu:2) gpu coprocessors per node (requires you select the gpu or gpu-debug partition with -p gpu or -p gpu-debug).
+#SBATCH --gres=mic:1          requests 1 or 2 (--gres=mic:2) Intel PHI coprocessors per node (requires you select the phi partition with -p phi).
+#SBATCH --reservation=RName   requests reservation named "Rname"
+#SBATCH -C K80                adds a constraint so the job will only run on a K80 GPU
+
+Instead of specifying the number of tasks and the memory per cpu, you can specify the requirements per node and the number of nodes using
+
+#SBATCH -N 1                  Number of nodes.
+#SBATCH --mem=24gb            Memory required per node (you can give MB or GB - if omitted, MB)
+#SBATCH --ntasks-per-node=24  Number of tasks per node.
+
+You should not overspecify the number of tasks by using both -n and the combination of -N and --ntasks-per-node or
+overspecify the memory required by using both --mem and -mem-per-cpu
+
+
+
+
+Sample GPU program
+Here is a script for running a multithreaded job that requires a GPU card. Be sure to use the --gres gpu:n option,
+where n is the number of GPUs you are requesting. This option is required to allocate the GPU hardware. Simply running
+in the gpu partition is not sufficient.
+
+#!/bin/bash
+#SBATCH -J my_jobname
+#SBATCH -o my_output_%j
+#SBATCH --mem=32GB
+#SBATCH -t 10:00:00
+#SBATCH -n 1
+#SBATCH -c 12
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1
+
+module load cuda
+my.program.cuda
+
+Running GPU programs on specific hardware
+You can request specific GPU hardware by using the constraints feature of SLURM. The GPU constraints currently
+available are: V100, K80, and K20X. Note that by requesting a specific GPU, your job may have to wait longer than
+normal for the resources to become available. Here is a script for running a multithreaded job on a V100 volta:
+
+#!/bin/bash
+#SBATCH -J my_jobname
+#SBATCH -o my_output_%j
+#SBATCH --mem=32GB
+#SBATCH -t 10:00:00
+#SBATCH -n 1
+#SBATCH -c 12
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1
+#SBATCH -C V100
+
+module load cuda
+my.program.cuda
+
+
+Job arrays
+To submit several jobs that are (almost) identical, you can use a job array. For example,
+
+#!/bin/bash
+#SBATCH -o out.%a.txt -t 00:05:00
+#SBATCH -a 1-10
+echo This is job $SLURM_ARRAY_TASK_ID
+
+If this script is submitted with sbatch, 10 jobs will actually be submitted. The job will create 10 output files,
+out.1.txt through out.10.txt, containing the line This is job 1 through This is job 10 respectively. Both the %a in
+the output filename and the variable $SLURM_ARRAY_TASK_ID will be replaced by the job array index. In practice, job
+arrays can be used to run many similar jobs with different input files whose names contain the array index, or the
+array index could be passed as a command-line argument to the program.
+
+Note that there is a total limit of 2000 jobs in the queue (either running or pending). So if a very large number of
+jobs need to be run, it is probably best to use a combination of a job array, and a loop inside the job script itself.
+For instance, if a 5000 jobs need to be run (say a program that reads input parameters, and 5000 different sets of
+parameters are to be used), the input parameters could be placed in files in.1.1 through in.50.100, and the following
+script used:
+
+#!/bin/bash
+#SBATCH -o log.txt -t 00:05:00
+#SBATCH -a 1-50
+for i in {1..100}; do
+  ip=$SLURM_ARRAY_TASK_ID.$i
+  myprogram in.$ip > out.$ip
+done
+
+This will run 50 separate jobs, each of which calls myprogram 100 times with a different set of parameters.
+
+
+
+
+sbatch my.script	submits a job script to the scheduler
+squeue	lists pending, running, or recently completed jobs
+scancel JobID	cancels a pending or running job
+sinfo -s	prints information about job partitions
+
+
+One option for mean and st.d:
+
+#!/bin/bash
+module load anaconda3/5.2.0b
+#SBATCH -o log.%a -t 5-00:00:00
+#SBATCH -a 1-100
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1
+for i in {1..10}; do
+  ip=$SLURM_ARRAY_TASK_ID.$i
+  myprogram in.$ip > out.$ip
+done
+get_stats.py

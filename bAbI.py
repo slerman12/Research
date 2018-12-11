@@ -284,3 +284,35 @@ class Read:
         print('test shape:', self.test_stories["answer"].shape if test_task != "separate" else self.test_stories[0]["answer"].shape)
         print('-')
         print('Compiling...')
+
+
+
+
+
+        # # One hot vector for categorical index sampled
+        # logit_mask = tf.one_hot(sample, tf.shape(logits)[-1], True, False)
+        #
+        # # Whichever index sampled, fill that with -infinity
+        # new_logits = tf.where(logit_mask, tf.fill(tf.shape(logits), tf.cast(-np.Inf, logits.dtype)), logits)
+        #
+        #
+        # # Sample
+        # sample = tf.cast(dist.sample(), tf.int32)
+        #
+        # # Add sample index to running list of sample indices
+        # # growing_list_of_sample_indices = tf.concat([growing_list_of_sample_indices, sample[tf.newaxis, ...]], 0)
+        # growing_list_of_sample_indices[n, ...] = sample[tf.newaxis, ...]
+        #
+        # # One hot vector for categorical index sampled
+        # logit_mask = tf.one_hot(sample, tf.shape(logits)[-1], True, False)
+        #
+        # # Whichever index sampled, fill that with -infinity
+        # new_logits = tf.where(logit_mask, tf.fill(tf.shape(logits), tf.cast(-np.Inf, logits.dtype)), logits)
+        #
+        # # Return updated while loop signature
+        # return n + 1, growing_list_of_sample_indices, new_logits
+
+
+# z = -tf.log(-tf.log(tf.random_uniform(tf.shape(logits),0,1)))
+# _, indices = tf.nn.top_k(logits + z,K)
+# return indices
