@@ -42,8 +42,8 @@ if args.call_sweep:
             file.write(params + '\n')
 
 path = os.getcwd()
-if not os.path.exists(path + "eval" + "/"):
-    os.makedirs(path + "eval" + "/")
+if not os.path.exists(path + "/eval"):
+    os.makedirs(path + "/eval")
 
 
     def slurm_script(n):
@@ -54,7 +54,7 @@ if not os.path.exists(path + "eval" + "/"):
     #SBATCH --array=0-{}
     module load anaconda3/5.2.0b
     {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
-    """.format(path + "eval", log_name, n, len(sweep) - 1, args.program, in_file_name)
+    """.format(path + "/eval", log_name, n, len(sweep) - 1, args.program, in_file_name)
 
 
     # Create a job for each run, each consisting of all of the params (e.g. for mean and st.d)
@@ -72,7 +72,7 @@ def evaluate_babi():
     for param_set in range(len(sweep)):
         results = []
         for r in range(args.num_runs):
-            with open("{}/{}.{}.{}".format(path + "eval", log_name, param_set, r)) as f:
+            with open("{}/{}.{}.{}".format(path + "/eval", log_name, param_set, r)) as f:
                 line = f.readlines()
                 assert len(line) == 1
                 line = line[0]
