@@ -30,11 +30,12 @@ sweep.extend([{"distributional": False, "top_k": top_k, "aggregate_method": agg,
               for top_k in range(1, 21) for agg in ["max", "mean", "concat"]])
 
 # TODO delete, testing
-for x in sweep:
-    x["epochs"] = 1
+# for x in sweep:
+#     x["epochs"] = 1
 
 log_name = "log"
 stats_file_name = "stats.txt"
+path = os.getcwd()
 
 print(args.call_sweep, args.num_runs)
 
@@ -53,7 +54,6 @@ if args.call_sweep:
                 params += '-{} {} '.format(key, parameterization[key])
             file.write(params + '\n')
 
-    path = os.getcwd()
     if not os.path.exists(path + "/eval"):
         os.makedirs(path + "/eval")
 
