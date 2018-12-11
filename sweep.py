@@ -90,7 +90,7 @@ def evaluate_babi():
             with open("{}/{}.{}.{}".format(path + "/eval", log_name, param_set, r)) as f:
                 line = f.readlines()
                 line = line[-1]
-                results += [line.split(' ')]
+                results += [float(i) for i in line.split(' ')]
         for task in range(20):
             stats["param_set_{}".format(param_set)]["task_{}".format(task)]["mean"] = \
                 np.mean([result[task] for result in results])
