@@ -5,6 +5,16 @@ import bAbI
 from Modules import MHDPA
 import argparse
 
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 # Arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('-max_supporting', type=int, default=20)
@@ -13,17 +23,17 @@ parser.add_argument('-question_embed_size', type=int, default=64)
 parser.add_argument('-support_embed_size', type=int, default=64)
 parser.add_argument('-mhdpa_key_size', type=int, default=64)
 parser.add_argument('-mhdpa_value_size', type=int, default=64)
-parser.add_argument('-distributional', type=bool, default=True)
+parser.add_argument('-distributional', type=str2bool, default=True)
 parser.add_argument('-top_k', type=int, default=3)
-parser.add_argument('-sample', type=bool, default=True)
-parser.add_argument('-uniform_sample', type=bool, default=False)
+parser.add_argument('-sample', type=str2bool, default=True)
+parser.add_argument('-uniform_sample', type=str2bool, default=False)
 parser.add_argument('-aggregate_method', type=str, default="max")
 parser.add_argument('-epochs', type=int, default=10000)
 parser.add_argument('-episodes', type=int, default=10)
 parser.add_argument('-batch_dim', type=int, default=100)
-parser.add_argument('-logging', type=bool, default=True)
-parser.add_argument('-saving', type=bool, default=True)
-parser.add_argument('-slurm', type=bool, default=False)
+parser.add_argument('-logging', type=str2bool, default=True)
+parser.add_argument('-saving', type=str2bool, default=True)
+parser.add_argument('-slurm', type=str2bool, default=False)
 args = parser.parse_args()
 
 # Data reader

@@ -4,9 +4,19 @@ import os
 import subprocess
 import numpy as np
 
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 # Arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('-call_sweep', type=bool, default=True)
+parser.add_argument('-call_sweep', type=str2bool, default=True)
 parser.add_argument('-program', type=str, default="Main.py")
 parser.add_argument('-num_runs', type=int, default=10)
 args = parser.parse_args()
@@ -25,6 +35,8 @@ sweep.extend([{"distributional": False, "top_k": top_k, "aggregate_method": agg,
 
 log_name = "log"
 stats_file_name = "stats.txt"
+
+print(args.call_sweep, args.num_runs)
 
 # Whether to run or just evaluate
 if args.call_sweep:
