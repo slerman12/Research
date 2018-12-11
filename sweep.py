@@ -99,6 +99,7 @@ def evaluate_babi():
                 line = f.readlines()
                 line = line[-1]
                 print(param_set + 1, r + 1)
+                print([i for i in line.split(' ')])
                 results += [float(i) for i in line.split(' ')]
         for task in range(20):
             stats["param_set_{}".format(param_set + 1)]["task_{}".format(task)]["mean"] = \
