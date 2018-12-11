@@ -78,10 +78,16 @@ def evaluate_babi():
                 line = line[0]
                 results += [line.split(' ')]
         for task in range(20):
-            stats["param_set_{}_task_{}_mean".format(param_set, task)] = np.mean([result[task] for result in results])
-            stats["param_set_{}_task_{}_std".format(param_set, task)] = np.std([result[task] for result in results])
-            stats["param_set_{}_all_tasks_mean".format(param_set)] = np.mean([v for v in result for result in results])
-            stats["param_set_{}_all_tasks_std".format(param_set)] = np.std([v for v in result for result in results])
+            stats["param_set_{}".format(param_set)]["task_{}".format(task)]["mean"] = \
+                np.mean([result[task] for result in results])
+            stats["param_set_{}".format(param_set)]["task_{}".format(task)]["std"] = \
+                np.std([result[task] for result in results])
+            stats["param_set_{}".format(param_set)]["all_tasks_mean"] = \
+                np.mean([v for v in result for result in results])
+            stats["param_set_{}".format(param_set)]["all_tasks_std"] = \
+                np.std([v for v in result for result in results])
+            with open("in", "w") as f:
+                stats["param_set_{}".format(param_set)]["params"] = f.readlines()[param_set]
     return stats
 
 
