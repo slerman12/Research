@@ -74,10 +74,10 @@ if args.call_sweep:
 #SBATCH -p gpu
 #SBATCH --gres=gpu:1
 #SBATCH -t 5-00:00:00 -o {}/{}.%a.{}
-#SBATCH --array=0-{}
+#SBATCH --array=1-{}
 module load anaconda3/5.2.0b
 python {} -name_suffix {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
-""".format(n, path + "/eval", log_name, n, len(sweep) - 1, args.program, n, in_file_name)
+""".format(n, path + "/eval", log_name, n, len(sweep), args.program, n, in_file_name)
 
 
     # Create a job for each run, each consisting of all of the params (e.g. for mean and st.d)
