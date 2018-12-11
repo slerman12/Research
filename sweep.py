@@ -60,13 +60,13 @@ if args.call_sweep:
 
     def slurm_script(n):
         return r"""#!/bin/bash
-    #SBATCH -p gpu
-    #SBATCH --gres=gpu:1
-    #SBATCH -t 5-00:00:00 -o {}/{}.%a.{}
-    #SBATCH --array=0-{}
-    module load anaconda3/5.2.0b
-    {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
-    """.format(path + "/eval", log_name, n, len(sweep) - 1, args.program, in_file_name)
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1
+#SBATCH -t 5-00:00:00 -o {}/{}.%a.{}
+#SBATCH --array=0-{}
+module load anaconda3/5.2.0b
+{} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
+""".format(path + "/eval", log_name, n, len(sweep) - 1, args.program, in_file_name)
 
 
     # Create a job for each run, each consisting of all of the params (e.g. for mean and st.d)
