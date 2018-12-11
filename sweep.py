@@ -56,7 +56,8 @@ if args.call_sweep:
     for run in range(args.num_runs):
         with open(slurm_script_name, "w") as file:
             file.write(slurm_script(run))
-        processes.append(subprocess.call(['sbatch', slurm_script_name], shell=True))
+        # processes.append(subprocess.call(['sbatch', slurm_script_name], shell=True))
+        subprocess.call(['sbatch {}'.format(slurm_script_name)], shell=True)
     # wait = [p.wait() for p in processes]
 
 
