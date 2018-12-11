@@ -199,6 +199,6 @@ with tf.Session() as sess:
         inputs = {question: data["question"], supports: data["supports"], answer: data["answer"],
                   question_len: data["question_len"], support_num: data["support_num"],
                   support_pos: data["support_pos"], support_len: data["support_len"]}
-        accuracies += accuracy.eval(inputs) + " "
+        accuracies += "{} ".format(accuracy.eval(inputs))
     print(accuracies)
 
