@@ -20,7 +20,7 @@ def str2bool(v):
 parser = argparse.ArgumentParser()
 parser.add_argument('-call_sweep', type=str2bool, default=True)
 parser.add_argument('-program', type=str, default="Main.py")
-parser.add_argument('-num_runs', type=int, default=10)
+parser.add_argument('-num_runs', type=int, default=5)
 parser.add_argument('-test_sweep', type=str2bool, default=False)
 args = parser.parse_args()
 
@@ -40,8 +40,6 @@ if args.test_sweep:
 log_name = "log"
 stats_file_name = "stats.txt"
 path = os.getcwd()
-
-print(args.call_sweep, args.num_runs)
 
 # Whether to run or just evaluate
 if args.call_sweep:
@@ -91,8 +89,7 @@ def evaluate_babi():
         for r in range(args.num_runs):
             with open("{}/{}.{}.{}".format(path + "/eval", log_name, param_set, r)) as f:
                 line = f.readlines()
-                assert len(line) == 1
-                line = line[0]
+                line = line[-1]
                 results += [line.split(' ')]
         for task in range(20):
             stats["param_set_{}".format(param_set)]["task_{}".format(task)]["mean"] = \
