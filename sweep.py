@@ -85,7 +85,7 @@ python {} -name_suffix {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
             file.write(slurm_script(run))
         # processes.append(subprocess.call(['sbatch', slurm_script_name], shell=True))
         subprocess.call(['sbatch {}'.format(slurm_script_name)], shell=True)
-        time.sleep(5)
+        time.sleep(1)
     # wait = [p.wait() for p in processes]
 
 
