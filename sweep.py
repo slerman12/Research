@@ -72,7 +72,7 @@ if args.call_sweep:
         return r"""#!/bin/bash
 #SBATCH -p gpu
 #SBATCH --gres=gpu:1
-#SBATCH -t 5-00:00:00 -o {}/{}.%a.{} -J $SLURM_ARRAY_TASK_ID_{}
+#SBATCH -t 5-00:00:00 -o {}/{}.%a.{} -J "$SLURM_ARRAY_TASK_ID"_{}
 #SBATCH --array=1-{}
 module load anaconda3/5.2.0b
 python {} -name_suffix {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
