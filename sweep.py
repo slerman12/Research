@@ -41,9 +41,9 @@ if args.call_sweep:
                 params += '-{} {} '.format(key, parameterization[key])
             file.write(params + '\n')
 
-path = os.getcwd()
-if not os.path.exists(path + "/eval"):
-    os.makedirs(path + "/eval")
+    path = os.getcwd()
+    if not os.path.exists(path + "/eval"):
+        os.makedirs(path + "/eval")
 
 
     def slurm_script(n):
