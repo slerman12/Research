@@ -19,8 +19,8 @@ sweep.extend([{"distributional": True, "top_k": top_k, "uniform_sample": True, "
 sweep.extend([{"distributional": False, "aggregate_method": agg, "slurm": True} for agg in ["max", "mean", "concat"]])
 
 # TODO delete, testing
-for x in sweep:
-    x["epochs"] = 1
+# for x in sweep:
+#     x["epochs"] = 1
 
 log_name = "log"
 stats_file_name = "stats.txt"
@@ -71,7 +71,7 @@ def evaluate_babi():
     for param_set in range(len(sweep)):
         results = []
         for r in range(args.num_runs):
-            with open("{}.{}.{}".format(log_name, param_set, r)) as f:
+            with open("{}/{}.{}.{}".format(path + "eval", log_name, param_set, r)) as f:
                 line = f.readlines()
                 assert len(line) == 1
                 line = line[0]
