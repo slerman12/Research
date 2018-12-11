@@ -38,7 +38,7 @@ parser.add_argument('-logging', type=str2bool, default=False)
 parser.add_argument('-saving', type=str2bool, default=True)
 parser.add_argument('-slurm', type=str2bool, default=False)
 args = parser.parse_args()
-print(args)
+print("\n", args, "\n")
 
 # Data reader
 reader = bAbI.Read(max_supporting=args.max_supporting)
