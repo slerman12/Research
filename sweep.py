@@ -38,6 +38,8 @@ sweep.extend([{"top_k": top_k, "uniform_sample": True, "aggregate_method": "conc
               for top_k in [1, 2, 3, 5, 7, 10, 15]])
 sweep.extend([{"distributional": False, "aggregate_method": agg, "slurm": True}
               for agg in ["max", "mean", "concat"]])
+sweep.extend([{"top_k": top_k, "slurm": True}
+              for top_k in [1, 2, 3, 5, 7, 10, 15]])
 for x in sweep:
     if args.test_sweep:
         x["epochs"] = 1
