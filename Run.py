@@ -208,3 +208,5 @@ with tf.Session() as sess:
         accuracies += "{} ".format(accuracy.eval(inputs))
     print(accuracies)
 
+
+# TODO if slurm, option to delete saved files so as not to take up memory (nah, increase memory tho)

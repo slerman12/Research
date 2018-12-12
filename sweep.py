@@ -113,7 +113,7 @@ def evaluate_babi():
             stats["param_set_{}".format(param_set + 1)]["all_tasks_std"] = \
                 np.std([v for result in results for v in result])
             with open("in") as f:
-                stats["param_set_{}".format(param_set + 1)]["params"] = f.readlines()[param_set + 1]
+                stats["param_set_{}".format(param_set + 1)]["params"] = f.readlines()[param_set]
     return stats
 
 
