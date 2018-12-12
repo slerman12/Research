@@ -135,13 +135,14 @@ with tf.Session() as sess:
     logs = tf.summary.merge_all()
     writer = tf.summary.FileWriter(saving_logging_directory + "Logs/" + args.name + "/" + args.name_suffix + "/", sess.graph)
 
-    # Restore any previously saved
+    # Restore any previously saved  TODO: don't restore for slurm!
     if args.saving:
         if not os.path.exists(saving_logging_directory + "Saved/" + args.name + "/"):
             os.makedirs(saving_logging_directory + "Saved/" + args.name + "/")
         if tf.train.checkpoint_exists(saving_logging_directory + "Saved/" + args.name + "/" + args.name_suffix):
             # NOTE: for some reason continuing training does not work after restoring
-            saver.restore(sess, saving_logging_directory + "Saved/" + args.name + "/" + args.name_suffix)
+            if not args.slurm:
+                saver.restore(sess, saving_logging_directory + "Saved/" + args.name + "/" + args.name_suffix)
 
     # Epochs
     epoch = 1
