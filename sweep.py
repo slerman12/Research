@@ -104,10 +104,10 @@ def evaluate_babi():
 
         stats["param_set_{}".format(param_set + 1)] = {}
         for task in range(20):
-            stats["param_set_{}".format(param_set + 1)]["task_{}".format(task)] = {}
-            stats["param_set_{}".format(param_set + 1)]["task_{}".format(task)]["mean"] = \
+            stats["param_set_{}".format(param_set + 1)]["task_{}".format(task + 1)] = {}
+            stats["param_set_{}".format(param_set + 1)]["task_{}".format(task + 1)]["mean"] = \
                 np.mean([result[task] for result in results])
-            stats["param_set_{}".format(param_set + 1)]["task_{}".format(task)]["std"] = \
+            stats["param_set_{}".format(param_set + 1)]["task_{}".format(task + 1)]["std"] = \
                 np.std([result[task] for result in results])
             stats["param_set_{}".format(param_set + 1)]["all_tasks_mean"] = \
                 np.mean([v for result in results for v in result])
