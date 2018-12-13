@@ -40,6 +40,8 @@ sweep.extend([{"distributional": False, "aggregate_method": agg, "slurm": True}
               for agg in ["max", "mean", "concat"]])
 sweep.extend([{"top_k": top_k, "slurm": True}
               for top_k in [1, 2, 3, 5, 7, 10, 15]])
+sweep.extend([{"top_k": top_k, "uniform_sample": True, "slurm": True}
+              for top_k in [1, 2, 3, 5, 7, 10, 15]])
 for x in sweep:
     if args.test_sweep:
         x["epochs"] = 1
@@ -123,3 +125,6 @@ def evaluate_babi():
 # Note: this won't give result since processes are merely queued; have to re-run this script after with call_sweep=False
 with open(stats_file_name, "w") as file:
     file.write(json.dumps(evaluate_babi()))
+
+# with open(stats_file_name) as f:
+#     data = json.load(f)
