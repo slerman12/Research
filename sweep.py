@@ -4,6 +4,8 @@ import os
 import subprocess
 import time
 import numpy as np
+import plotly
+import plotly.graph_objs as go
 
 
 def str2bool(v):
@@ -17,7 +19,7 @@ def str2bool(v):
 
 # Arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('-call_sweep', type=str2bool, default=True)
+parser.add_argument('-mode', type=str, default="sweep")
 parser.add_argument('-program', type=str, default="Run.py")
 parser.add_argument('-num_runs', type=int, default=10)
 parser.add_argument('-num_epochs', type=int, default=100000)
@@ -41,7 +43,7 @@ sweep.extend([{"distributional": False, "aggregate_method": agg, "slurm": True}
 sweep.extend([{"top_k": top_k, "slurm": True}
               for top_k in [1, 2, 3, 5, 7, 10, 15]])
 sweep.extend([{"top_k": top_k, "uniform_sample": True, "slurm": True}
-              for top_k in [1, 2, 3, 5, 7, 10, 15]])
+              for top_k in [1, 2, 3, 5, 7, 10, 15]])  # might go up
 for x in sweep:
     if args.test_sweep:
         x["epochs"] = 1
@@ -53,7 +55,7 @@ stats_file_name = "stats"
 path = os.getcwd()
 
 # Whether to run or just evaluate
-if args.call_sweep:
+if args.mode == "sweep":
     slurm_script_name = "sweep"
     in_file_name = "in"
 
@@ -76,7 +78,7 @@ if args.call_sweep:
         return r"""#!/bin/bash
 #SBATCH -p gpu
 #SBATCH --gres=gpu:1
-#SBATCH -t 5-00:00:00 -o {}/{}.%a.{} -J run_{}
+#SBATCH -t 2-00:00:00 -o {}/{}.%a.{} -J run_{}
 #SBATCH --array=1-{}
 module load anaconda3/5.2.0b
 python {} -name_suffix {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
@@ -122,9 +124,76 @@ def evaluate_babi():
     return stats
 
 
-# Note: this won't give result since processes are merely queued; have to re-run this script after with call_sweep=False
-with open(stats_file_name, "w") as file:
-    file.write(json.dumps(evaluate_babi()))
+def graph_babi(data):
+    main_groups = {'Distributional Sampled - Salience': lambda param: "-distributional False" not in param and "-sample False"
+                                                           not in param and "-uniform_sample True" not in param,
+                   'Distributional Deterministic - Salience': lambda param: "-sample False" in param,
+                   "Distributional Sampled - Uniform": lambda param: "-uniform_sample True" in param,
+                   "Standard, Not Distributional": lambda param: "-distributional False" in param}
 
-# with open(stats_file_name) as f:
-#     data = json.load(f)
+    best_performing_per_group = {g: 0 for g in main_groups}
+
+    for param_set in data:
+        for group in main_groups:
+            if main_groups[group](data[param_set]["params"]):
+                if data[param_set]["all_tasks_mean"] > best_performing_per_group[group]:
+                    best_performing_per_group[group] = data[param_set]["all_tasks_mean"]
+
+    # TODO: label with +- std and maybe top k
+
+    layout = go.Layout(
+        xaxis=dict(
+            tickfont=dict(
+                size=15,
+                color='rgb(0, 0, 0)'
+            ),
+            showticklabels=False
+        ),
+        yaxis=dict(range=[.85, .95]),
+        title='Performance Per Method',
+        # legend=dict(orientation="h"),
+        legend=dict(x=.6, y=1),
+        font=dict(size=22)
+    )
+    # layout = go.Layout(
+    #     # xaxis=dict(
+    #     #     tickfont=dict(
+    #     #         size=15,
+    #     #         family='Arial',
+    #     #         color='rgb(0, 0, 0)'
+    #     #     )
+    #     # ),
+    #     yaxis=dict(range=[.85, .95]),
+    #     title='Performance Per Method',
+    #     font=dict(size=17, family="Arial")
+    # )
+    graph_data = [go.Bar(
+        x=[key for key in best_performing_per_group],
+        y=[best_performing_per_group[key] for key in best_performing_per_group],
+        text=["{:.3%}".format(best_performing_per_group[key]) for key in best_performing_per_group],
+        textposition='auto'
+    )]
+
+    graph_data = [go.Bar(
+        name=key,
+        x=[key],
+        y=[best_performing_per_group[key]],
+        text=["{:.3%}".format(best_performing_per_group[key])],
+        textposition='auto'
+    ) for key in best_performing_per_group]
+
+    fig = go.Figure(data=graph_data, layout=layout)
+
+    plotly.offline.plot(fig, filename='bAbI_salience_sampling_bar_chart.html',
+                        image='jpeg', image_filename='bAbI_salience_sampling_bar_chart',
+                        image_height=700, image_width=1300)
+
+
+if args.mode == "eval" or args.mode == "eval_and_graph":
+    with open(stats_file_name, "w") as file:
+        file.write(json.dumps(evaluate_babi()))
+
+if args.mode == "graph" or args.mode == "eval_and_graph":
+    with open(stats_file_name) as f:
+        data = json.load(f)
+        graph_babi(data)

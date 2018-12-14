@@ -135,7 +135,7 @@ with tf.Session() as sess:
     logs = tf.summary.merge_all()
     writer = tf.summary.FileWriter(saving_logging_directory + "Logs/" + args.name + "/" + args.name_suffix + "/", sess.graph)
 
-    # Restore any previously saved  TODO: don't restore for slurm!
+    # Restore any previously saved  TODO: Resume option - separate save directory for last ckpt!
     if args.saving:
         if not os.path.exists(saving_logging_directory + "Saved/" + args.name + "/"):
             os.makedirs(saving_logging_directory + "Saved/" + args.name + "/")
