@@ -1,4 +1,5 @@
 import argparse
+import copy
 import json
 import os
 import subprocess
@@ -125,11 +126,12 @@ def evaluate_babi():
 
 
 def graph_babi(data):
-    main_groups = {'Distributional Sampled - Salience': lambda param: "-distributional False" not in param and "-sample False"
+    main_groups = {
+        'Distributional Sampled - Salience': lambda param: "-distributional False" not in param and "-sample False"
                                                            not in param and "-uniform_sample True" not in param,
-                   'Distributional Deterministic - Salience': lambda param: "-sample False" in param,
-                   "Distributional Sampled - Uniform": lambda param: "-uniform_sample True" in param,
-                   "Standard, Not Distributional": lambda param: "-distributional False" in param}
+        'Distributional Deterministic - Salience': lambda param: "-sample False" in param,
+        "Distributional Sampled - Uniform": lambda param: "-uniform_sample True" in param,
+        "Standard, Not Distributional": lambda param: "-distributional False" in param}  # Can make bold with "<b></b>
 
     best_performing_per_group = {g: 0 for g in main_groups}
 
@@ -150,7 +152,7 @@ def graph_babi(data):
             showticklabels=False
         ),
         yaxis=dict(range=[.85, .95]),
-        title='Performance Per Method',
+        title='Best Performance Per Method',
         # legend=dict(orientation="h"),
         legend=dict(x=.6, y=1),
         font=dict(size=22)
@@ -185,9 +187,250 @@ def graph_babi(data):
     fig = go.Figure(data=graph_data, layout=layout)
 
     plotly.offline.plot(fig, filename='bAbI_salience_sampling_bar_chart.html',
-                        image='jpeg', image_filename='bAbI_salience_sampling_bar_chart',
+                        image='png', image_filename='bAbI_salience_sampling_bar_chart',
                         image_height=700, image_width=1300)
 
+    distributional_groups = {'Sampled<br>- Salience<br>- Concat': lambda param: "-distributional False" not in param and
+                                                                                "-sample False" not in param and
+                                                                                "-uniform_sample True" not in param and
+                                                                                "-aggregate_method concat" in param,
+                             'Deterministic<br>- Salience<br>- Concat': lambda param: "-sample False" in param and
+                                                                                      "-aggregate_method concat" in param,
+                             "Sampled<br>- Uniform<br>- Concat": lambda param: "-uniform_sample True" in param and
+                                                                               "-aggregate_method concat" in param,
+                             'Sampled<br>- Salience<br>- Max': lambda param: "-distributional False" not in param and
+                                                                             "-sample False" not in param and
+                                                                             "-uniform_sample True" not in param and
+                                                                             ("-aggregate_method max" in param or
+                                                                              "-aggregate_method" not in param),
+                             # 'Deterministic<br>- Salience<br>- Max': lambda param: "-sample False" in param and
+                             #                                                       ("-aggregate_method max" in param or
+                             #                                                        "-aggregate_method" not in param)
+                             }  # Em dash: &#8212; Bullet: &#8226;
+
+    performance_for_each_k = {g: {} for g in distributional_groups}
+
+    for param_set in data:
+        for group in distributional_groups:
+            if distributional_groups[group](data[param_set]["params"]):
+                k = int(data[param_set]["params"].split("-top_k ")[1].split(' ')[0])
+                performance_for_each_k[group][k] = data[param_set]["all_tasks_mean"]
+
+    headerColor = 'grey'
+    rowEvenColor = 'lightgrey'
+    rowOddColor = 'white'
+
+    num_sampled_k = [1, 2, 3, 5, 7, 10, 15]
+
+    trace0 = go.Table(
+        header=dict(
+            values=[['MODEL']] + [[str(k)] for k in num_sampled_k],
+            line=dict(color='#506784'),
+            fill=dict(color=headerColor),
+            align=['left', 'center'],
+            font=dict(color='white', size=20)
+        ),
+        # columnwidth=[11, 7],
+        cells=dict(
+            values=[["<b>{}</b>".format(g) for g in performance_for_each_k] + ['<b>AVERAGE</b>']] +
+                   [["{:.1%}".format(performance_for_each_k[g][k])  # Can add tsd but idk: <br>&plusmn; {:.1%}
+                     if k != num_sampled_k[int(np.argmax([performance_for_each_k[g][kk] for kk in num_sampled_k]))]
+                     else "<b>{:.1%}</b>".format(performance_for_each_k[g][k])
+                     for g in performance_for_each_k] +
+                    ['{:.1%}'.format(np.mean([performance_for_each_k[g][k] for g in performance_for_each_k]))
+                     if k != num_sampled_k[int(np.argmax([np.mean([performance_for_each_k[gr][kk] for gr in
+                                                                   performance_for_each_k]) for kk in num_sampled_k]))]
+                     else '<b>{:.1%}</b>'.format(np.mean([performance_for_each_k[g][k]
+                                                          for g in performance_for_each_k]))]
+                    for k in num_sampled_k],
+            line=dict(color='#506784'),
+            fill=dict(color=[rowEvenColor, rowOddColor]),
+            align=['left', 'center'],
+            font=dict(color=['#506784'], size=[17, 24], ),
+            # height=50
+        ))
+
+    table_data = [trace0]
+
+    layout = go.Layout(
+        title='Model vs. Num Sampled',
+        font=dict(size=22)
+    )
+
+    fig = go.Figure(data=table_data, layout=layout)
+
+    plotly.offline.plot(fig, filename='bAbI_salience_sampling_table.html',
+                        image='png', image_filename='bAbI_salience_sampling_table_chart',
+                        # image_height=700, image_width=1000
+                        image_height=600, image_width=1300
+                        )
+
+    tasks = range(1, 21)
+
+    all_groups = copy.deepcopy(distributional_groups)
+    all_groups.update({"Standard<br>- Max": lambda param: "-distributional False" in param and
+                                                          ("-aggregate_method max" in param or
+                                                           "-aggregate_method" not in param),
+                       "Standard<br>- Concat": lambda param: "-distributional False" in param and
+                                                             "-aggregate_method concat" in param})
+    best_performance_for_each_task = {g: {task: 0 for task in tasks} for g in all_groups}
+
+    for param_set in data:
+        for group in all_groups:
+            if all_groups[group](data[param_set]["params"]):
+                for task in tasks:
+                    if data[param_set]["task_{}".format(task)]["mean"] > best_performance_for_each_task[group][task]:
+                        best_performance_for_each_task[group][task] = data[param_set]["task_{}".format(task)]["mean"]
+
+    headerColor = 'grey'
+    rowEvenColor = 'lightgrey'
+    rowOddColor = 'white'
+
+    trace0 = go.Table(
+        header=dict(
+            values=[['MODEL']] + [[str(task)] for task in tasks],
+            line=dict(color='#506784'),
+            fill=dict(color=headerColor),
+            align=['left', 'center'],
+            font=dict(color='white', size=17)
+        ),
+        columnwidth=[11, 7],
+        cells=dict(
+            values=[["<b>{}</b>".format(g) for g in best_performance_for_each_task]] +
+                   [["{:.1%}".format(best_performance_for_each_task[g][task])  # Can add sd but idk: <br>&plusmn; {:.1%}
+                     if g != list(all_groups.keys())[int(np.argmax([best_performance_for_each_task[gr][task]
+                                                                    for gr in list(all_groups.keys())]))]
+                     else "<b>{:.1%}</b>".format(best_performance_for_each_task[g][task])
+                     for g in best_performance_for_each_task]
+                    for task in tasks],
+            line=dict(color='#506784'),
+            fill=dict(color=[rowEvenColor, rowOddColor]),
+            align=['left', 'center'],
+            font=dict(color=['#506784'], size=[17, 20], ),
+            # height=50
+        ))
+
+    table_data = [trace0]
+
+    layout = go.Layout(
+        title='Model vs. Task',
+        font=dict(size=22),
+    )
+
+    fig = go.Figure(data=table_data, layout=layout)
+
+    plotly.offline.plot(fig, filename='bAbI_salience_sampling_tasks_table.html',
+                        image='png', image_filename='bAbI_salience_sampling_tasks_table',
+                        image_height=700, image_width=2200,
+                        # image_height=700, image_width=2500
+                        )
+
+    stand_groups = {"Max": lambda param: "-distributional False" in param and
+                                                  ("-aggregate_method max" in param or
+                                                   "-aggregate_method" not in param),
+                    "Mean": lambda param: "-distributional False" in param and
+                                                   "-aggregate_method mean" in param,
+                    "Concat": lambda param: "-distributional False" in param and
+                                                     "-aggregate_method concat" in param}
+    dist_groups_copy = {key.replace("<br>-", ""): {} for key in distributional_groups}
+    for param_set in data:
+        for group in distributional_groups:
+            if distributional_groups[group](data[param_set]["params"]):
+                k = int(data[param_set]["params"].split("-top_k ")[1].split(' ')[0])
+                dist_groups_copy[group.replace("<br>-", "")][k] = data[param_set]
+                
+    for param_set in data:
+        for g in stand_groups:
+            if callable(stand_groups[g]):
+                if stand_groups[g](data[param_set]["params"]):
+                    stand_groups[g] = data[param_set]
+
+    trace0 = go.Table(
+        header=dict(
+            values=[['Aggregation']] + [[str(task)] for task in tasks],
+            line=dict(color='#506784'),
+            fill=dict(color=headerColor),
+            align=['left', 'center'],
+            font=dict(color='white', size=17)
+        ),
+        columnwidth=[10, 8],
+        cells=dict(
+            values=[["<b>{}</b>".format(g) for g in stand_groups]] +
+                   [["{:.1%}<br>&plusmn; {:.1%}".format(stand_groups[group]["task_{}".format(task)]["mean"],
+                                                        stand_groups[group]["task_{}".format(task)]["std"])
+                     if group != list(stand_groups.keys())[int(np.argmax([stand_groups[g]["task_{}".format(task)]["mean"] for g in stand_groups]))]
+                     else "<b>{:.1%}<br>&plusmn; {:.1%}</b>".format(stand_groups[group]["task_{}".format(task)]["mean"],
+                                                                    stand_groups[group]["task_{}".format(task)]["std"])
+                     for group in stand_groups]
+                    for task in tasks],
+            line=dict(color='#506784'),
+            fill=dict(color=[rowEvenColor, rowOddColor]),
+            align=['left', 'center'],
+            font=dict(color=['#506784'], size=[17, 20], ),
+            # height=50
+        ))
+
+    table_data = [trace0]
+
+    layout = go.Layout(
+        title="Standard, Not Distributional",
+        font=dict(size=22),
+    )
+
+    fig = go.Figure(data=table_data, layout=layout)
+
+    plotly.offline.plot(fig, filename='bAbI_salience_sampling_tasks_table_standard.html',
+                        image='png', image_filename='bAbI_salience_sampling_tasks_table_standard',
+                        image_height=700, image_width=2300,
+                        # image_height=700, image_width=2500
+                        )
+
+    for param_set in data:
+        for group in all_groups:
+            if all_groups[group](data[param_set]["params"]):
+                if group.replace("<br>-", "") in dist_groups_copy:
+                    print("blaaaa")
+                    group = group.replace("<br>-", "")
+                    trace0 = go.Table(
+                        header=dict(
+                            values=[['Num Sampled']] + [[str(task)] for task in tasks],
+                            line=dict(color='#506784'),
+                            fill=dict(color=headerColor),
+                            align=['left', 'center'],
+                            font=dict(color='white', size=17)
+                        ),
+                        columnwidth=[11, 7],
+                        cells=dict(
+                            values=[["<b>{}</b>".format(k) for k in num_sampled_k]] +
+                                   [["{:.1%}<br>&plusmn; {:.1%}".format(dist_groups_copy[group][k]["task_{}".format(task)]["mean"],
+                                                                        dist_groups_copy[group][k]["task_{}".format(task)]["std"])
+                                     if k != num_sampled_k[int(np.argmax([dist_groups_copy[group][kk]["task_{}".format(task)]["mean"] for kk in num_sampled_k]))]
+                                     else "<b>{:.1%}<br>&plusmn; {:.1%}</b>".format(dist_groups_copy[group][k]["task_{}".format(task)]["mean"],
+                                                                 dist_groups_copy[group][k]["task_{}".format(task)]["std"])
+                                     for k in num_sampled_k]
+                                    for task in tasks],
+                            line=dict(color='#506784'),
+                            fill=dict(color=[rowEvenColor, rowOddColor]),
+                            align=['left', 'center'],
+                            font=dict(color=['#506784'], size=[17, 20], ),
+                            # height=50
+                        ))
+
+                    table_data = [trace0]
+
+                    layout = go.Layout(
+                        title=group.replace("<br>-", ""),
+                        font=dict(size=22),
+                    )
+
+                    fig = go.Figure(data=table_data, layout=layout)
+
+                    plotly.offline.plot(fig, filename='bAbI_salience_sampling_tasks_table_{}.html'.format(group.replace("<br>-", "")),
+                                        image='png', image_filename='bAbI_salience_sampling_tasks_table_{}'.format(group.replace("<br>- ", "_")),
+                                        image_height=700, image_width=2200,
+                                        # image_height=700, image_width=2500
+                                        )
+                    del dist_groups_copy[group]
 
 if args.mode == "eval" or args.mode == "eval_and_graph":
     with open(stats_file_name, "w") as file:
