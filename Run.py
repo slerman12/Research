@@ -22,8 +22,8 @@ parser.add_argument('-name', type=str, default='name')
 parser.add_argument('-name_suffix', type=str, default='name_suffix')
 parser.add_argument('-max_supporting', type=int, default=20)
 parser.add_argument('-word_dim', type=int, default=20)
-parser.add_argument('-question_embed_size', type=int, default=64)
-parser.add_argument('-support_embed_size', type=int, default=64)
+parser.add_argument('-question_embed_size', type=int, default=31)
+parser.add_argument('-support_embed_size', type=int, default=32)
 parser.add_argument('-mhdpa_key_size', type=int, default=64)
 parser.add_argument('-mhdpa_value_size', type=int, default=64)
 parser.add_argument('-distributional', type=str2bool, default=True)
@@ -91,7 +91,7 @@ if args.distributional:
     mhdpa.keep_most_salient(top_k=args.top_k, sample=args.sample, uniform_sample=args.uniform_sample)
 
 # Apply MLP
-mhdpa.apply_mlp_to_relations()
+mhdpa.apply_mlp_to_relations(residual_type="add", entity_for_residual=entities)
 
 # Aggregate
 relations = mhdpa.aggregate_relations(args.aggregate_method)  # Concat for distributional

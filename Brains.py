@@ -77,7 +77,7 @@ class MHDPA(snt.AbstractModule):
 
         return self._relations
 
-    def apply_mlp_to_relations(self, output_size=None, residual=False, entity_for_residual=None):
+    def apply_mlp_to_relations(self, output_size=None, residual_type=None, entity_for_residual=None):
         if output_size is None:
             output_size = [self._key_size, self._key_size]
         relations = snt.BatchApply(snt.nets.mlp.MLP(output_sizes=output_size))(self._relations)
@@ -119,9 +119,12 @@ class MHDPA(snt.AbstractModule):
         # Yikes, all the relations attend to agent's location (early ego).
 
         # Yeah, they explicitly mention hierarchical RL. (This is all in reference to Relational Deep RL paper./
-        if residual:
+        if residual_type is not None:
             assert entity_for_residual is not None
-            relations += entity_for_residual
+            if residual_type == "add":
+                relations += entity_for_residual
+            elif residual_type == "concat":
+                relations = tf.concat([relations, entity_for_residual])
 
         # Apply mask
         if self._entity_mask is not None:
