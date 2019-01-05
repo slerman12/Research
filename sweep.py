@@ -206,9 +206,12 @@ def graph_babi(data):
                                                                              "-uniform_sample True" not in param and
                                                                              ("-aggregate_method max" in param or
                                                                               "-aggregate_method" not in param),
-                             # 'Deterministic<br>- Salience<br>- Max': lambda param: "-sample False" in param and
-                             #                                                       ("-aggregate_method max" in param or
-                             #                                                        "-aggregate_method" not in param)
+                             'Deterministic<br>- Salience<br>- Max': lambda param: "-sample False" in param and
+                                                                                   ("-aggregate_method max" in param or
+                                                                                    "-aggregate_method" not in param),
+                             "Sampled<br>- Uniform<br>- Max": lambda param: "-uniform_sample True" in param and
+                                                                            ("-aggregate_method max" in param or
+                                                                                "-aggregate_method" not in param)
                              }  # Em dash: &#8212; Bullet: &#8226;
 
     performance_for_each_k = {g: {} for g in distributional_groups}
@@ -329,19 +332,19 @@ def graph_babi(data):
                         )
 
     stand_groups = {"Max": lambda param: "-distributional False" in param and
-                                                  ("-aggregate_method max" in param or
-                                                   "-aggregate_method" not in param),
+                                         ("-aggregate_method max" in param or
+                                          "-aggregate_method" not in param),
                     "Mean": lambda param: "-distributional False" in param and
-                                                   "-aggregate_method mean" in param,
+                                          "-aggregate_method mean" in param,
                     "Concat": lambda param: "-distributional False" in param and
-                                                     "-aggregate_method concat" in param}
+                                            "-aggregate_method concat" in param}
     dist_groups_copy = {key.replace("<br>-", ""): {} for key in distributional_groups}
     for param_set in data:
         for group in distributional_groups:
             if distributional_groups[group](data[param_set]["params"]):
                 k = int(data[param_set]["params"].split("-top_k ")[1].split(' ')[0])
                 dist_groups_copy[group.replace("<br>-", "")][k] = data[param_set]
-                
+
     for param_set in data:
         for g in stand_groups:
             if callable(stand_groups[g]):
@@ -361,7 +364,8 @@ def graph_babi(data):
             values=[["<b>{}</b>".format(g) for g in stand_groups]] +
                    [["{:.1%}<br>&plusmn; {:.1%}".format(stand_groups[group]["task_{}".format(task)]["mean"],
                                                         stand_groups[group]["task_{}".format(task)]["std"])
-                     if group != list(stand_groups.keys())[int(np.argmax([stand_groups[g]["task_{}".format(task)]["mean"] for g in stand_groups]))]
+                     if group != list(stand_groups.keys())[
+                       int(np.argmax([stand_groups[g]["task_{}".format(task)]["mean"] for g in stand_groups]))]
                      else "<b>{:.1%}<br>&plusmn; {:.1%}</b>".format(stand_groups[group]["task_{}".format(task)]["mean"],
                                                                     stand_groups[group]["task_{}".format(task)]["std"])
                      for group in stand_groups]
@@ -405,11 +409,15 @@ def graph_babi(data):
                         columnwidth=[11, 7],
                         cells=dict(
                             values=[["<b>{}</b>".format(k) for k in num_sampled_k]] +
-                                   [["{:.1%}<br>&plusmn; {:.1%}".format(dist_groups_copy[group][k]["task_{}".format(task)]["mean"],
-                                                                        dist_groups_copy[group][k]["task_{}".format(task)]["std"])
-                                     if k != num_sampled_k[int(np.argmax([dist_groups_copy[group][kk]["task_{}".format(task)]["mean"] for kk in num_sampled_k]))]
-                                     else "<b>{:.1%}<br>&plusmn; {:.1%}</b>".format(dist_groups_copy[group][k]["task_{}".format(task)]["mean"],
-                                                                 dist_groups_copy[group][k]["task_{}".format(task)]["std"])
+                                   [["{:.1%}<br>&plusmn; {:.1%}".format(
+                                       dist_groups_copy[group][k]["task_{}".format(task)]["mean"],
+                                       dist_groups_copy[group][k]["task_{}".format(task)]["std"])
+                                     if k != num_sampled_k[int(np.argmax(
+                                       [dist_groups_copy[group][kk]["task_{}".format(task)]["mean"] for kk in
+                                        num_sampled_k]))]
+                                     else "<b>{:.1%}<br>&plusmn; {:.1%}</b>".format(
+                                       dist_groups_copy[group][k]["task_{}".format(task)]["mean"],
+                                       dist_groups_copy[group][k]["task_{}".format(task)]["std"])
                                      for k in num_sampled_k]
                                     for task in tasks],
                             line=dict(color='#506784'),
@@ -428,12 +436,15 @@ def graph_babi(data):
 
                     fig = go.Figure(data=table_data, layout=layout)
 
-                    plotly.offline.plot(fig, filename='bAbI_salience_sampling_tasks_table_{}.html'.format(group.replace("<br>-", "")),
-                                        image='png', image_filename='bAbI_salience_sampling_tasks_table_{}'.format(group.replace("<br>- ", "_")),
+                    plotly.offline.plot(fig, filename='bAbI_salience_sampling_tasks_table_{}.html'.format(
+                        group.replace("<br>-", "")),
+                                        image='png', image_filename='bAbI_salience_sampling_tasks_table_{}'.format(
+                            group.replace("<br>- ", "_")),
                                         image_height=700, image_width=2200,
                                         # image_height=700, image_width=2500
                                         )
                     del dist_groups_copy[group]
+
 
 if args.mode == "eval" or args.mode == "eval_and_graph":
     with open(stats_file_name, "w") as file:
