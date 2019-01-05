@@ -45,6 +45,8 @@ sweep.extend([{"top_k": top_k, "slurm": True}
               for top_k in [1, 2, 3, 5, 7, 10, 15]])
 sweep.extend([{"top_k": top_k, "uniform_sample": True, "slurm": True}
               for top_k in [1, 2, 3, 5, 7, 10, 15]])  # might go up
+sweep.extend([{"top_k": top_k, "sample": False, "slurm": True}
+              for top_k in [1, 2, 3, 5, 7, 10, 15]])
 for x in sweep:
     if args.test_sweep:
         x["epochs"] = 1
@@ -79,7 +81,8 @@ if args.mode == "sweep":
         return r"""#!/bin/bash
 #SBATCH -p gpu
 #SBATCH --gres=gpu:1
-#SBATCH -t 2-00:00:00 -o {}/{}.%a.{} -J run_{}
+#SBATCH -t 5-00:00:00 -o {}/{}.%a.{} -J run_{}
+#SBATCH --mem=50gb 
 #SBATCH --array=1-{}
 module load anaconda3/5.2.0b
 python {} -name_suffix {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
