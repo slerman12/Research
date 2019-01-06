@@ -91,7 +91,7 @@ if args.distributional:
     mhdpa.keep_most_salient(top_k=args.top_k, sample=args.sample, uniform_sample=args.uniform_sample)
 
 # Apply MLP
-mhdpa.apply_mlp_to_relations(residual_type="add", entity_for_residual=entities)
+mhdpa.apply_mlp_to_relations(residual_type="add")
 
 # Aggregate
 relations = mhdpa.aggregate_relations(args.aggregate_method)  # Concat for distributional

@@ -18,6 +18,7 @@ class MHDPA(snt.AbstractModule):
         """
         super(MHDPA, self).__init__(name=name)
 
+        self._entities = None
         self._relations = None
         self._mlp_relations = None
         self._aggregate_relations = None
@@ -27,7 +28,7 @@ class MHDPA(snt.AbstractModule):
         self._most_salient_entity_mask = None
 
     def _build(self, entities, key_size, value_size, num_heads, entity_mask=None):
-        self._entities = entities
+        self._original_entities = self._entities = entities
         self._key_size = key_size
         self._value_size = value_size
         self._num_heads = num_heads
@@ -77,7 +78,7 @@ class MHDPA(snt.AbstractModule):
 
         return self._relations
 
-    def apply_mlp_to_relations(self, output_size=None, residual_type=None, entity_for_residual=None):
+    def apply_mlp_to_relations(self, output_size=None, residual_type=None):
         if output_size is None:
             output_size = [self._key_size, self._key_size]
         relations = snt.BatchApply(snt.nets.mlp.MLP(output_sizes=output_size))(self._relations)
@@ -120,11 +121,10 @@ class MHDPA(snt.AbstractModule):
 
         # Yeah, they explicitly mention hierarchical RL. (This is all in reference to Relational Deep RL paper./
         if residual_type is not None:
-            assert entity_for_residual is not None
             if residual_type == "add":
-                relations += entity_for_residual
+                relations += self._entities
             elif residual_type == "concat":
-                relations = tf.concat([relations, entity_for_residual])
+                relations = tf.concat([relations, self._entities])
 
         # Apply mask
         if self._entity_mask is not None:
@@ -170,6 +170,7 @@ class MHDPA(snt.AbstractModule):
 
         # Retrieving most salient relations (entity-based contexts) here
         self._relations = self._most_salient_relations = tf.gather_nd(self._relations, top_k_indices)
+        self._entities = self._most_salient_entities = tf.gather_nd(self._entities, top_k_indices)
 
         # Update entity mask
         if self._entity_mask is not None:
