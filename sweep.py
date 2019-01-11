@@ -5,7 +5,7 @@ import os
 import subprocess
 import time
 import numpy as np
-import plotly
+import plotly.plotly as plotly
 import plotly.graph_objs as go
 
 
@@ -189,7 +189,7 @@ def graph_babi(data):
 
     fig = go.Figure(data=graph_data, layout=layout)
 
-    plotly.offline.plot(fig, filename='bAbI_salience_sampling_bar_chart.html',
+    plotly.plot(fig, filename='bAbI_salience_sampling_bar_chart.html',
                         image='png', image_filename='bAbI_salience_sampling_bar_chart',
                         image_height=700, image_width=1300)
 
@@ -265,7 +265,7 @@ def graph_babi(data):
 
     fig = go.Figure(data=table_data, layout=layout)
 
-    plotly.offline.plot(fig, filename='bAbI_salience_sampling_table.html',
+    plotly.plot(fig, filename='bAbI_salience_sampling_table.html',
                         image='png', image_filename='bAbI_salience_sampling_table_chart',
                         # image_height=700, image_width=1000
                         image_height=600, image_width=1300
@@ -325,7 +325,7 @@ def graph_babi(data):
 
     fig = go.Figure(data=table_data, layout=layout)
 
-    plotly.offline.plot(fig, filename='bAbI_salience_sampling_tasks_table.html',
+    plotly.plot(fig, filename='bAbI_salience_sampling_tasks_table.html',
                         image='png', image_filename='bAbI_salience_sampling_tasks_table',
                         image_height=700, image_width=2200,
                         # image_height=700, image_width=2500
@@ -386,7 +386,7 @@ def graph_babi(data):
 
     fig = go.Figure(data=table_data, layout=layout)
 
-    plotly.offline.plot(fig, filename='bAbI_salience_sampling_tasks_table_standard.html',
+    plotly.plot(fig, filename='bAbI_salience_sampling_tasks_table_standard.html',
                         image='png', image_filename='bAbI_salience_sampling_tasks_table_standard',
                         image_height=700, image_width=2300,
                         # image_height=700, image_width=2500
@@ -436,7 +436,7 @@ def graph_babi(data):
 
                     fig = go.Figure(data=table_data, layout=layout)
 
-                    plotly.offline.plot(fig, filename='bAbI_salience_sampling_tasks_table_{}.html'.format(
+                    plotly.plot(fig, filename='bAbI_salience_sampling_tasks_table_{}.html'.format(
                         group.replace("<br>-", "")),
                                         image='png', image_filename='bAbI_salience_sampling_tasks_table_{}'.format(
                             group.replace("<br>- ", "_")),
