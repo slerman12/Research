@@ -200,13 +200,21 @@ with tf.Session() as sess:
     # Accuracy on test tasks
     saver.restore(sess, saving_logging_directory + "Saved/" + args.name + "/" + args.name_suffix)
     accuracies = ""
+    valid_accs = ""
     for task in range(1, 21):
         data = reader.read_test(task=task)
         inputs = {question: data["question"], supports: data["supports"], answer: data["answer"],
                   question_len: data["question_len"], support_num: data["support_num"],
                   support_pos: data["support_pos"], support_len: data["support_len"]}
         accuracies += "{} ".format(accuracy.eval(inputs))
+
+        data = reader.read_valid(task=task)
+        inputs = {question: data["question"], supports: data["supports"], answer: data["answer"],
+                  question_len: data["question_len"], support_num: data["support_num"],
+                  support_pos: data["support_pos"], support_len: data["support_len"]}
+        valid_accs += "{} ".format(accuracy.eval(inputs))
     print(accuracies)
+    print(valid_accs)
 
 
 # TODO if slurm, option to delete saved files so as not to take up memory (nah, increase memory tho)

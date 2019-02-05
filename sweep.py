@@ -5,7 +5,7 @@ import os
 import subprocess
 import time
 import numpy as np
-import plotly.plotly as plotly
+import plotly.offline as plotly
 import plotly.graph_objs as go
 
 
@@ -102,15 +102,22 @@ python {} -name_suffix {} `awk "NR==$SLURM_ARRAY_TASK_ID" {}`
 
 def evaluate_babi():
     stats = {}
+    valids_stats = {}
     for param_set in range(len(sweep)):
         results = []
+        valids = []
         for r in range(args.num_runs):
             with open("{}/{}.{}.{}".format(path + "/eval", log_name, param_set + 1, r + 1)) as f:
                 line = f.readlines()
-                line = line[-1]
+                line = line[-2]
                 print(param_set + 1, r + 1)
                 print([i for i in line.split(' ')])
                 results.append([float(i) for i in line.split(' ')[:-1]])
+
+                line = line[-1]
+                print(param_set + 1, r + 1)
+                print([i for i in line.split(' ')])
+                valids.append([float(i) for i in line.split(' ')[:-1]])
 
         stats["param_set_{}".format(param_set + 1)] = {}
         for task in range(20):
@@ -125,10 +132,24 @@ def evaluate_babi():
                 np.std([v for result in results for v in result])
             with open("in") as f:
                 stats["param_set_{}".format(param_set + 1)]["params"] = f.readlines()[param_set]
-    return stats
+
+        valids_stats["param_set_{}".format(param_set + 1)] = {}
+        for task in range(20):
+            valids_stats["param_set_{}".format(param_set + 1)]["task_{}".format(task + 1)] = {}
+            valids_stats["param_set_{}".format(param_set + 1)]["task_{}".format(task + 1)]["mean"] = \
+                np.mean([result[task] for result in valids])
+            valids_stats["param_set_{}".format(param_set + 1)]["task_{}".format(task + 1)]["std"] = \
+                np.std([result[task] for result in valids])
+            valids_stats["param_set_{}".format(param_set + 1)]["all_tasks_mean"] = \
+                np.mean([v for result in valids for v in result])
+            valids_stats["param_set_{}".format(param_set + 1)]["all_tasks_std"] = \
+                np.std([v for result in valids for v in result])
+            with open("in") as f:
+                valids_stats["param_set_{}".format(param_set + 1)]["params"] = f.readlines()[param_set]
+    return stats, valids_stats
 
 
-def graph_babi(data):
+def graph_babi(data, data_valids):
     main_groups = {
         'Distributional Sampled - Salience': lambda param: "-distributional False" not in param and "-sample False"
                                                            not in param and "-uniform_sample True" not in param,
@@ -155,7 +176,7 @@ def graph_babi(data):
             showticklabels=False
         ),
         yaxis=dict(range=[.85, .95]),
-        title='Best Performance Per Method',
+        # title='Best Performance Per Method',
         # legend=dict(orientation="h"),
         legend=dict(x=.6, y=1),
         font=dict(size=22)
@@ -190,8 +211,8 @@ def graph_babi(data):
     fig = go.Figure(data=graph_data, layout=layout)
 
     plotly.plot(fig, filename='bAbI_salience_sampling_bar_chart.html',
-                        image='png', image_filename='bAbI_salience_sampling_bar_chart',
-                        image_height=700, image_width=1300)
+                image='png', image_filename='bAbI_salience_sampling_bar_chart',
+                image_height=900, image_width=1300)
 
     distributional_groups = {'Sampled<br>- Salience<br>- Concat': lambda param: "-distributional False" not in param and
                                                                                 "-sample False" not in param and
@@ -211,7 +232,7 @@ def graph_babi(data):
                                                                                     "-aggregate_method" not in param),
                              "Sampled<br>- Uniform<br>- Max": lambda param: "-uniform_sample True" in param and
                                                                             ("-aggregate_method max" in param or
-                                                                                "-aggregate_method" not in param)
+                                                                             "-aggregate_method" not in param)
                              }  # Em dash: &#8212; Bullet: &#8226;
 
     performance_for_each_k = {g: {} for g in distributional_groups}
@@ -234,9 +255,10 @@ def graph_babi(data):
             line=dict(color='#506784'),
             fill=dict(color=headerColor),
             align=['left', 'center'],
-            font=dict(color='white', size=20)
+            font=dict(color='white', size=27),
+            height=38
         ),
-        # columnwidth=[11, 7],
+        columnwidth=[11, 7],
         cells=dict(
             values=[["<b>{}</b>".format(g) for g in performance_for_each_k] + ['<b>AVERAGE</b>']] +
                    [["{:.1%}".format(performance_for_each_k[g][k])  # Can add tsd but idk: <br>&plusmn; {:.1%}
@@ -252,24 +274,24 @@ def graph_babi(data):
             line=dict(color='#506784'),
             fill=dict(color=[rowEvenColor, rowOddColor]),
             align=['left', 'center'],
-            font=dict(color=['#506784'], size=[17, 24], ),
+            font=dict(color=['#506784'], size=[26, 30], ),
             # height=50
         ))
 
     table_data = [trace0]
 
     layout = go.Layout(
-        title='Model vs. Num Sampled',
+        # title='Model vs. Num Sampled',
         font=dict(size=22)
     )
 
     fig = go.Figure(data=table_data, layout=layout)
 
     plotly.plot(fig, filename='bAbI_salience_sampling_table.html',
-                        image='png', image_filename='bAbI_salience_sampling_table_chart',
-                        # image_height=700, image_width=1000
-                        image_height=600, image_width=1300
-                        )
+                image='png', image_filename='bAbI_salience_sampling_table_chart',
+                # image_height=700, image_width=1000
+                image_height=1000, image_width=1355
+                )
 
     tasks = range(1, 21)
 
@@ -294,11 +316,14 @@ def graph_babi(data):
 
     trace0 = go.Table(
         header=dict(
-            values=[['MODEL']] + [[str(task)] for task in tasks],
+            values=[['MODEL']] + [[str(task)] for task in tasks]
+                   # + [["AVERAGE"]]
+            ,
             line=dict(color='#506784'),
             fill=dict(color=headerColor),
             align=['left', 'center'],
-            font=dict(color='white', size=17)
+            font=dict(color='white', size=27),
+            height=38
         ),
         columnwidth=[11, 7],
         cells=dict(
@@ -308,28 +333,38 @@ def graph_babi(data):
                                                                     for gr in list(all_groups.keys())]))]
                      else "<b>{:.1%}</b>".format(best_performance_for_each_task[g][task])
                      for g in best_performance_for_each_task]
-                    for task in tasks],
+                    for task in tasks]
+                   # + [["<b>{:.1%}</b>".format(np.mean([best_performance_for_each_task[g][task]
+                   #                                                     for task in tasks])) if np.mean([best_performance_for_each_task[g][task]
+                   #                                                                                      for task in tasks]) == np.max([np.mean([best_performance_for_each_task[gg][ttask]
+                   #                                                                                                                      for ttask in tasks]) for gg in best_performance_for_each_task])
+                   #                         else "{:.1%}".format(np.mean([best_performance_for_each_task[g][task]
+                   #                                                          for task in tasks]))
+                   #                        for g in best_performance_for_each_task]]
+            ,
             line=dict(color='#506784'),
             fill=dict(color=[rowEvenColor, rowOddColor]),
             align=['left', 'center'],
-            font=dict(color=['#506784'], size=[17, 20], ),
+            font=dict(color=['#506784'], size=[26, 30], ),
             # height=50
         ))
 
     table_data = [trace0]
 
     layout = go.Layout(
-        title='Model vs. Task',
+        # title='Model vs. Task',
         font=dict(size=22),
     )
 
     fig = go.Figure(data=table_data, layout=layout)
 
     plotly.plot(fig, filename='bAbI_salience_sampling_tasks_table.html',
-                        image='png', image_filename='bAbI_salience_sampling_tasks_table',
-                        image_height=700, image_width=2200,
-                        # image_height=700, image_width=2500
-                        )
+                image='png', image_filename='bAbI_salience_sampling_tasks_table',
+                image_height=1500, image_width=3000,
+                # image_height=700, image_width=2500
+                )
+
+    return
 
     stand_groups = {"Max": lambda param: "-distributional False" in param and
                                          ("-aggregate_method max" in param or
@@ -387,10 +422,10 @@ def graph_babi(data):
     fig = go.Figure(data=table_data, layout=layout)
 
     plotly.plot(fig, filename='bAbI_salience_sampling_tasks_table_standard.html',
-                        image='png', image_filename='bAbI_salience_sampling_tasks_table_standard',
-                        image_height=700, image_width=2300,
-                        # image_height=700, image_width=2500
-                        )
+                image='png', image_filename='bAbI_salience_sampling_tasks_table_standard',
+                image_height=700, image_width=2300,
+                # image_height=700, image_width=2500
+                )
 
     for param_set in data:
         for group in all_groups:
@@ -438,19 +473,24 @@ def graph_babi(data):
 
                     plotly.plot(fig, filename='bAbI_salience_sampling_tasks_table_{}.html'.format(
                         group.replace("<br>-", "")),
-                                        image='png', image_filename='bAbI_salience_sampling_tasks_table_{}'.format(
+                                image='png', image_filename='bAbI_salience_sampling_tasks_table_{}'.format(
                             group.replace("<br>- ", "_")),
-                                        image_height=700, image_width=2200,
-                                        # image_height=700, image_width=2500
-                                        )
+                                image_height=700, image_width=2200,
+                                # image_height=700, image_width=2500
+                                )
                     del dist_groups_copy[group]
 
 
 if args.mode == "eval" or args.mode == "eval_and_graph":
+    stats, valids_stats = evaluate_babi()
     with open(stats_file_name, "w") as file:
-        file.write(json.dumps(evaluate_babi()))
+        file.write(json.dumps(stats))
+    with open(stats_file_name + "_valids", "w") as file:
+        file.write(json.dumps(valids_stats))
 
 if args.mode == "graph" or args.mode == "eval_and_graph":
     with open(stats_file_name) as f:
         data = json.load(f)
-        graph_babi(data)
+    with open(stats_file_name + "_valids") as g:
+        data_valids = json.load(g)
+    graph_babi(data, data_valids)

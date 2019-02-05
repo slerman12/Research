@@ -15,6 +15,7 @@ class Read:
         self.train_stories = []
         self.test_stories = []
         self.valid_stories = []
+        self.valid_stories_tasks = []
 
         # Data metrics
         self.vocab_size = 0
@@ -65,12 +66,20 @@ class Read:
         # Return
         return batch
 
-    def read_valid(self, batch_size=None):
-        if batch_size:
-            indices = random.sample(range(self.valid_stories_length), batch_size)
-            return {item: self.valid_stories[item][indices] for item in self.valid_stories}
+    def read_valid(self, batch_size=None, task="all"):
+        if task == "all":
+            if batch_size:
+                indices = random.sample(range(self.valid_stories_length), batch_size)
+                return {item: self.valid_stories[item][indices] for item in self.valid_stories}
+            else:
+                return self.valid_stories
         else:
-            return self.valid_stories
+            task = task - 1
+            if batch_size:
+                indices = random.sample(range(self.valid_stories_length), batch_size)
+                return {item: self.valid_stories_tasks[task][item][indices] for item in self.valid_stories_tasks[task]}
+            else:
+                return self.valid_stories_tasks[task]
 
     def read_test(self, task, batch_size=None):
         task = task - 1
@@ -160,6 +169,7 @@ class Read:
             elif "valid" in file:
                 if valid_task == "all":
                     self.valid_stories += self.get_stories(file, unify_supporting, only_supporting, max_supporting)
+                    self.valid_stories_tasks.append(self.get_stories(file, unify_supporting, only_supporting, max_supporting))
                 elif "qa{}_".format(valid_task) in file:
                     self.valid_stories = self.get_stories(file, unify_supporting, only_supporting, max_supporting)
 
@@ -259,6 +269,7 @@ class Read:
         self.test_stories = vectorize_and_pad(self.test_stories) if test_task != "separate" \
             else [vectorize_and_pad(ts) for ts in self.test_stories]
         self.valid_stories = vectorize_and_pad(self.valid_stories)
+        self.valid_stories_tasks = [vectorize_and_pad(ts) for ts in self.valid_stories_tasks]
 
         self.train_stories_length = self.train_stories["supports"].shape[0]
         self.valid_stories_length = self.valid_stories["supports"].shape[0]

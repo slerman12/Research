@@ -82,6 +82,7 @@ class ReadPD:
         self.memory_data = self.start(self.memory_data_file, self.sequence_dropout, temporal=temporal, inference_type=inference_type, groups=groups)
         self.validation_data = self.start(self.validation_data_file, temporal=temporal, inference_type=inference_type, groups=groups)
         self.evaluation_data = self.start(self.evaluation_data_file, temporal=temporal, inference_type=inference_type, groups=groups)
+        self.all_data = self.start(file, temporal=temporal, inference_type=inference_type, groups=groups)
 
     def iterate_batch(self, batch_dim, raw_batch=False):
         # Reset and shuffle batch when all items have been iterated
@@ -130,7 +131,7 @@ class ReadPD:
             # All patient records (sorted by date-time)
             patient_records = file[file["PATNO"] == patient].sort_values(["INFODT"])
 
-            # If sequence dropout
+            # If sequence dropout TODO shouldn't this only be used in he batch iterator?
             if sequence_dropout_prob:
                 # Patient records to use
                 patient_record_indices = []

@@ -20,6 +20,7 @@ class MHDPA(snt.AbstractModule):
 
         self._entities = None
         self._relations = None
+        self.saliences = None
         self._mlp_relations = None
         self._aggregate_relations = None
         self._most_salient_relations = None
@@ -62,8 +63,9 @@ class MHDPA(snt.AbstractModule):
         else:
             assert entity_mask.shape[1] == num_entities
             weights, squared_entity_mask = self.masked_softmask(weights, entity_mask, True)
+        self.saliences = tf.squeeze(weights)
 
-        # For distributional, normalizing to probas  TODO: maybe use logits instead?
+        # For distributional, sum column then normalizing to probas  TODO: maybe use logits/softmax instead?
         self._context_saliences = snt.BatchFlatten()(tf.reduce_sum(weights, axis=2))
         self._context_saliences /= tf.tile(tf.reduce_sum(self._context_saliences, 1)[:, tf.newaxis], [1, num_entities])
 
