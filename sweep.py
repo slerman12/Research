@@ -162,7 +162,7 @@ def graph_babi(data, data_valids):
     for param_set in data:
         for group in main_groups:
             if main_groups[group](data[param_set]["params"]):
-                if data[param_set]["all_tasks_mean"] > best_performing_per_group[group]:
+                if data_valids[param_set]["all_tasks_mean"] > best_performing_per_group[group]:
                     best_performing_per_group[group] = data[param_set]["all_tasks_mean"]
 
     # TODO: label with +- std and maybe top k
@@ -307,7 +307,7 @@ def graph_babi(data, data_valids):
         for group in all_groups:
             if all_groups[group](data[param_set]["params"]):
                 for task in tasks:
-                    if data[param_set]["task_{}".format(task)]["mean"] > best_performance_for_each_task[group][task]:
+                    if data_valids[param_set]["task_{}".format(task)]["mean"] > best_performance_for_each_task[group][task]:
                         best_performance_for_each_task[group][task] = data[param_set]["task_{}".format(task)]["mean"]
 
     headerColor = 'grey'
