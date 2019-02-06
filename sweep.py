@@ -158,12 +158,14 @@ def graph_babi(data, data_valids):
         "Standard, Not Distributional": lambda param: "-distributional False" in param}  # Can make bold with "<b></b>
 
     best_performing_per_group = {g: 0 for g in main_groups}
+    best_performing_per_group_valid = {g: 0 for g in main_groups}
 
     for param_set in data:
         for group in main_groups:
             if main_groups[group](data[param_set]["params"]):
-                if data_valids[param_set]["all_tasks_mean"] > best_performing_per_group[group]:
+                if data_valids[param_set]["all_tasks_mean"] > best_performing_per_group_valid[group]:
                     best_performing_per_group[group] = data[param_set]["all_tasks_mean"]
+                    best_performing_per_group_valid[group] = data_valids[param_set]["all_tasks_mean"]
 
     # TODO: label with +- std and maybe top k
 
@@ -302,13 +304,15 @@ def graph_babi(data, data_valids):
                        "Standard<br>- Concat": lambda param: "-distributional False" in param and
                                                              "-aggregate_method concat" in param})
     best_performance_for_each_task = {g: {task: 0 for task in tasks} for g in all_groups}
+    best_performance_for_each_task_valid = {g: {task: 0 for task in tasks} for g in all_groups}
 
     for param_set in data:
         for group in all_groups:
             if all_groups[group](data[param_set]["params"]):
                 for task in tasks:
-                    if data_valids[param_set]["task_{}".format(task)]["mean"] > best_performance_for_each_task[group][task]:
+                    if data_valids[param_set]["task_{}".format(task)]["mean"] > best_performance_for_each_task_valid[group][task]:
                         best_performance_for_each_task[group][task] = data[param_set]["task_{}".format(task)]["mean"]
+                        best_performance_for_each_task_valid[group][task] = data_valids[param_set]["task_{}".format(task)]["mean"]
 
     headerColor = 'grey'
     rowEvenColor = 'lightgrey'
