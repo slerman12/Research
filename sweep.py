@@ -108,13 +108,13 @@ def evaluate_babi():
         valids = []
         for r in range(args.num_runs):
             with open("{}/{}.{}.{}".format(path + "/eval", log_name, param_set + 1, r + 1)) as f:
-                line = f.readlines()
-                line = line[-2]
+                liness = f.readlines()
+                line = liness[-2]
                 print(param_set + 1, r + 1)
                 print([i for i in line.split(' ')])
                 results.append([float(i) for i in line.split(' ')[:-1]])
 
-                line = line[-1]
+                line = liness[-1]
                 print(param_set + 1, r + 1)
                 print([i for i in line.split(' ')])
                 valids.append([float(i) for i in line.split(' ')[:-1]])
