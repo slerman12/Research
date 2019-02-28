@@ -49,7 +49,7 @@ train_data, test_data = data['train'], data['test']
 train_data = train_data.repeat().shuffle(10000).batch(args.batch_dim).prefetch(tf.data.experimental.AUTOTUNE)
 example = tf.compat.v1.data.make_one_shot_iterator(train_data).get_next()
 train_images, train_labels = example["image"], example["label"]
-test_data = test_data.shuffle(10000).batch(1000).repeat()
+test_data = test_data.repeat().shuffle(10000).batch(200).prefetch(tf.data.experimental.AUTOTUNE)
 test = tf.compat.v1.data.make_one_shot_iterator(test_data).get_next()
 test_images, test_labels = test["image"], test["label"]
 
@@ -96,7 +96,7 @@ def run(images, label, batch_dim):
 
 
 train_loss, train_accuracy = run(train_images, train_labels, args.batch_dim)
-_, test_accuracy = run(test_images, test_labels, 1000)
+_, test_accuracy = run(test_images, test_labels, 200)
 
 # Optimizer
 optimizer = tf.train.AdamOptimizer()
