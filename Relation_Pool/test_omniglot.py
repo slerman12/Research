@@ -1,6 +1,7 @@
 import tensorflow as tf
 import sonnet as snt
-from Relation_Pool.relation_pool import RelationPool
+# from Relation_Pool.relation_pool import RelationPool
+from relation_pool import Relation_Pool
 import tensorflow_datasets as tfds
 import os
 import argparse
