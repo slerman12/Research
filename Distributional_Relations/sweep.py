@@ -155,7 +155,8 @@ def graph_babi(data, data_valids):
                                                            not in param and "-uniform_sample True" not in param,
         'Distributional Deterministic - Salience': lambda param: "-sample False" in param,
         "Distributional Sampled - Uniform": lambda param: "-uniform_sample True" in param,
-        "Standard, Not Distributional": lambda param: "-distributional False" in param}  # Can make bold with "<b></b>
+        "Standard, Not Distributional": lambda param: "-distributional False" in param and "-aggregate_method mean"
+                                                      not in param}  # Can make bold with "<b></b>
 
     best_performing_per_group = {g: 0 for g in main_groups}
     best_performing_per_group_valid = {g: 0 for g in main_groups}
@@ -321,7 +322,7 @@ def graph_babi(data, data_valids):
     trace0 = go.Table(
         header=dict(
             values=[['MODEL']] + [[str(task)] for task in tasks]
-                   # + [["AVERAGE"]]
+                   + [["AVERAGE"]]
             ,
             line=dict(color='#506784'),
             fill=dict(color=headerColor),
@@ -338,13 +339,13 @@ def graph_babi(data, data_valids):
                      else "<b>{:.1%}</b>".format(best_performance_for_each_task[g][task])
                      for g in best_performance_for_each_task]
                     for task in tasks]
-                   # + [["<b>{:.1%}</b>".format(np.mean([best_performance_for_each_task[g][task]
-                   #                                                     for task in tasks])) if np.mean([best_performance_for_each_task[g][task]
-                   #                                                                                      for task in tasks]) == np.max([np.mean([best_performance_for_each_task[gg][ttask]
-                   #                                                                                                                      for ttask in tasks]) for gg in best_performance_for_each_task])
-                   #                         else "{:.1%}".format(np.mean([best_performance_for_each_task[g][task]
-                   #                                                          for task in tasks]))
-                   #                        for g in best_performance_for_each_task]]
+                   + [["<b>{:.1%}</b>".format(np.mean([best_performance_for_each_task[g][task]
+                                                                       for task in tasks])) if np.mean([best_performance_for_each_task[g][task]
+                                                                                                        for task in tasks]) == np.max([np.mean([best_performance_for_each_task[gg][ttask]
+                                                                                                                                        for ttask in tasks]) for gg in best_performance_for_each_task])
+                                           else "{:.1%}".format(np.mean([best_performance_for_each_task[g][task]
+                                                                            for task in tasks]))
+                                          for g in best_performance_for_each_task]]
             ,
             line=dict(color='#506784'),
             fill=dict(color=[rowEvenColor, rowOddColor]),
@@ -367,8 +368,6 @@ def graph_babi(data, data_valids):
                 image_height=1500, image_width=3000,
                 # image_height=700, image_width=2500
                 )
-
-    return
 
     stand_groups = {"Max": lambda param: "-distributional False" in param and
                                          ("-aggregate_method max" in param or

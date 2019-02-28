@@ -1,7 +1,7 @@
 import tensorflow as tf
 import sonnet as snt
-from Brains import MHDPA
-import bAbI
+from Distributional_Relations.Brains import MHDPA
+from bAbI_Dataset import bAbI
 import os
 import argparse
 
