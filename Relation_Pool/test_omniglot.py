@@ -34,7 +34,7 @@ parser.add_argument('-sample', type=str2bool, default=True)
 parser.add_argument('-uniform_sample', type=str2bool, default=False)
 parser.add_argument('-aggregate_method', type=str, default="max")
 parser.add_argument('-epochs', type=int, default=10000)
-parser.add_argument('-episodes', type=int, default=10)
+parser.add_argument('-episodes', type=int, default=25)
 parser.add_argument('-batch_dim', type=int, default=32)
 parser.add_argument('-logging', type=str2bool, default=False)
 parser.add_argument('-saving', type=str2bool, default=True)
@@ -117,7 +117,7 @@ with tf.Session() as sess:
         # Episodes
         for _ in range(args.episodes):
             # Train
-            _, episode_loss, train_acc, test_acc = sess.run([train, train_loss, train_accuracy, test_accuracy])
+            _, episode_loss, train_acc = sess.run([train, train_loss, train_accuracy])
 
             episode_loss += episode_loss
             episode += 1
@@ -128,6 +128,8 @@ with tf.Session() as sess:
             #     epoch += 1
             #     episode = 1
             #     break
+
+        test_acc = sess.run([test_accuracy])
 
         # Print performance
         print('Epoch', epoch, 'of', args.epochs, 'episode', episode, 'training loss:', episode_loss,
