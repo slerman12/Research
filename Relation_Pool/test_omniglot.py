@@ -53,7 +53,7 @@ test = tf.compat.v1.data.make_one_shot_iterator(test_data).get_next()
 test_images, test_labels = test["image"], test["label"]
 
 
-def run(images, label):
+def run(images, label, batch_dim):
     # Images to representations
     kernel_size = 3
     stride_size = 2
@@ -72,8 +72,8 @@ def run(images, label):
     range_ = tf.cast(tf.range(N), tf.float32)
     Y_coord = tf.reshape(tf.tile(range_[:, tf.newaxis], [1, N]), [N, N])
     X_coord = tf.tile(range_[tf.newaxis, :], [N, 1])
-    X_coord = tf.tile(X_coord[tf.newaxis, :, :, tf.newaxis], [args.batch_dim, 1, 1, 1])
-    Y_coord = tf.tile(Y_coord[tf.newaxis, :, :, tf.newaxis], [args.batch_dim, 1, 1, 1])
+    X_coord = tf.tile(X_coord[tf.newaxis, :, :, tf.newaxis], [batch_dim, 1, 1, 1])
+    Y_coord = tf.tile(Y_coord[tf.newaxis, :, :, tf.newaxis], [batch_dim, 1, 1, 1])
     final_concat = tf.concat([image_representations, X_coord], axis=3)
     final_concat = tf.concat([final_concat, Y_coord], axis=3)
 
@@ -94,8 +94,8 @@ def run(images, label):
     return loss, accuracy
 
 
-train_loss, train_accuracy = run(train_images, train_labels)
-_, test_accuracy = run(test_images, test_labels)
+train_loss, train_accuracy = run(train_images, train_labels, args.batch_dim)
+_, test_accuracy = run(test_images, test_labels, 1000)
 
 # Optimizer
 optimizer = tf.train.AdamOptimizer()
@@ -117,7 +117,7 @@ with tf.Session() as sess:
         # Episodes
         for _ in range(args.episodes):
             # Train
-            _, episode_loss, train_accuracy = sess.run([train, train_loss, train_accuracy])
+            _, episode_loss, train_acc, test_acc = sess.run([train, train_loss, train_accuracy, test_accuracy])
 
             episode_loss += episode_loss
             episode += 1
@@ -131,7 +131,7 @@ with tf.Session() as sess:
 
         # Print performance
         print('Epoch', epoch, 'of', args.epochs, 'episode', episode, 'training loss:', episode_loss,
-              'training accuracy:', train_accuracy, 'test accuracy:', test_accuracy)
+              'training accuracy:', train_acc, 'test accuracy:', test_acc)
 
 
 
