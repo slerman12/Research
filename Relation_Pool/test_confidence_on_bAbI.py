@@ -1,7 +1,7 @@
 import tensorflow as tf
 import sonnet as snt
 from relation_pool import RelationPool
-from bAbI_Dataset import bAbI
+from ..bAbI_Dataset import bAbI
 import os
 import argparse
 
