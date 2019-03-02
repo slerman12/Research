@@ -45,7 +45,7 @@ args = parser.parse_args()
 print("\n", args, "\n")
 
 # Data reader
-reader = bAbI.Read(directory="/Users/sam/Documents/Programming/Research/bAbI_Dataset/tasks_1-20_v1-2/en-valid-10k",
+reader = bAbI.Read(directory="bAbI_Dataset/tasks_1-20_v1-2/en-valid-10k",
                    max_supporting=args.max_supporting)
 
 # Inputs
