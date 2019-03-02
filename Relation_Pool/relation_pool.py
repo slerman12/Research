@@ -3,7 +3,8 @@ import sonnet as snt
 
 
 class RelationPool(snt.AbstractModule):
-    def __init__(self, entities, k, name="relation_pool"):
+    def __init__(self, entities, k, aggregation_mode="max_pool",
+                 initiate_pool_mode="salience_sampling", name="relation_pool"):
         """Initialize pool with passed in entities
         Args:
             entities: original entities to be related
@@ -14,20 +15,32 @@ class RelationPool(snt.AbstractModule):
         # Size of each entity/relation
         self._entity_size = entities.get_shape().as_list()[-1]
 
-        # Original entities, represented
+        # Original entities, represented TODO should they be further represented like this?
         self._entities = snt.BatchApply(snt.nets.mlp.MLP([self._entity_size] * 4))(entities)
 
         # Pool level size
         self._k = k
 
-        # Discover contexts for entities  TODO represent entities as relations first
+        # Discover contexts for entities
         contexts, weights = self._discover_relational_context(entities)
 
-        # Initiate pool with entities k most salient and set highest level
-        indices = self._salience_sampling(weights, self._k)
-        self._relations = tf.gather_nd(entities, indices)
+        # Global context
+        self._global_context = self._aggregate(contexts, mode=aggregation_mode)
+
+        # Error inference for confidence sampling
+        self._error_inference = snt.nets.mlp.MLP([256, 256, 64, 64, 1])
+
+        # Get indices of entities k most salient
+        if initiate_pool_mode == "salience_sampling":
+            indices = self._salience_sampling(weights, self._k)
+        elif initiate_pool_mode == "confidence_sampling":
+            indices, _ = self._confidence_sampling(self._entities, self._global_context, self._k)
+
+        # Relations and highest level
+        self._relations = self._highest_level_relations = tf.gather_nd(self._entities, indices)
+
+        # Contexts for salience sampling
         self._contexts = tf.gather_nd(contexts, indices)
-        self._highest_level_relations = tf.gather_nd(self._entities, indices)
 
     def _build(self, level):
         """Consider each entity and relation pair-wise, add these to pool, reduce pool to size k
@@ -39,30 +52,56 @@ class RelationPool(snt.AbstractModule):
         """
         # Iterate up the relation hierarchy
         for _ in range(level if self.is_connected else level - 1):
-            # Get relations and contexts from pairing each relation in pool and entity
-            relations_pairwise = self._pairwise_with_entities(self._highest_level_relations)
-
-            # Represent relations
-            relations_represented = self._relation_representation(relations_pairwise)
-
-            # Discover contexts (Note: self attention is performed level-wise, not on entities as the context source)
-            contexts, weights = self._discover_relational_context(relations_represented)
-
-            # Return top k indices
-            indices = self._salience_sampling(weights, self._k)
-
-            # Top k relations and contexts
-            relations = tf.gather_nd(relations_represented, indices)
-            contexts = tf.gather_nd(contexts, indices)
-
-            # Update highest level
-            self._highest_level_relations = tf.gather_nd(relations_pairwise, indices)
-
-            # Add these relations and contexts to pool
-            self._add_to_pool(relations, contexts)
+            self._iterate_via_salience_sampling()
 
         # Return pool
         return self._relations, self._contexts
+
+    def _iterate_via_confidence_sampling(self):
+        """Consider each entity and relation pair-wise, add these to pool, reduce pool to size k
+        """
+        # Get relations and contexts from pairing each relation in pool and entity
+        relations_pairwise = self._pairwise_with_entities(self._highest_level_relations)
+
+        # Represent relations
+        relations_represented = self._relation_representation(relations_pairwise)
+
+        # Return top k indices
+        indices, _ = self._confidence_sampling(relations_represented, self._global_context, self.k)
+
+        # Top k relations
+        relations = tf.gather_nd(relations_represented, indices)
+
+        # Update highest level
+        self._highest_level_relations = tf.gather_nd(relations_pairwise, indices)
+
+        # Add these relations to pool
+        self._add_to_pool(relations)
+
+    def _iterate_via_salience_sampling(self):
+        """Consider each entity and relation pair-wise, add these to pool, reduce pool to size k
+        """
+        # Get relations and contexts from pairing each relation in pool and entity
+        relations_pairwise = self._pairwise_with_entities(self._highest_level_relations)
+
+        # Represent relations
+        relations_represented = self._relation_representation(relations_pairwise)
+
+        # Discover contexts (Note: self attention is performed level-wise, not on entities as the context source)
+        contexts, weights = self._discover_relational_context(relations_represented)
+
+        # Return top k indices
+        indices = self._salience_sampling(weights, self._k)
+
+        # Top k relations and contexts
+        relations = tf.gather_nd(relations_represented, indices)
+        contexts = tf.gather_nd(contexts, indices)
+
+        # Update highest level
+        self._highest_level_relations = tf.gather_nd(relations_pairwise, indices)
+
+        # Add these relations and contexts to pool
+        self._add_to_pool(relations, contexts)
 
     def _pairwise_with_entities(self, relations):
         """Consider each entity and relation pair-wise
@@ -107,7 +146,26 @@ class RelationPool(snt.AbstractModule):
         # Return representations
         return relation_representations
 
-    def _add_to_pool(self, relations, contexts):
+    def _aggregate(self, to_aggregate, mode="max_pool"):
+        """Aggregate inputs
+        Args:
+            to_aggregate: items to aggregate
+            mode: method of aggregation
+        Returns:
+            aggregate: aggregated items
+        """
+        # Aggregate relations
+        if mode == "max_pool":
+            aggregate = tf.math.reduce_max(to_aggregate, axis=1)
+        elif mode == "mean":
+            aggregate = tf.math.reduce_mean(to_aggregate, axis=1)
+        elif mode == "concat":
+            aggregate = snt.BatchFlatten()(to_aggregate)
+        elif mode == "lstm":
+            pass
+        return aggregate
+
+    def _add_to_pool(self, relations, contexts=None):
         """Adds relations and relational contexts to pool
         Args:
             relations: relations to add
@@ -115,7 +173,8 @@ class RelationPool(snt.AbstractModule):
         """
         # Concatenate relations and contexts to existing pool
         self._relations = tf.concat([self._relations, relations], axis=-2)
-        self._contexts = tf.concat([self._contexts, contexts], axis=-2)
+        if contexts is not None:
+            self._contexts = tf.concat([self._contexts, contexts], axis=-2)
 
     def _discover_relational_context(self, relations, context_source=None, residual=True):
         """Discovering a relational context
@@ -133,8 +192,7 @@ class RelationPool(snt.AbstractModule):
         # Separate attending relations & attended context source s.t. entities may constitute the context
         if context_source is None:
             # Linearly project queries, keys, and values from relations
-            qkv_size = 2 * key_size + value_size
-            qkv = snt.BatchApply(snt.Linear(qkv_size))(relations)
+            qkv = snt.BatchApply(snt.Linear(2 * key_size + value_size))(relations)
             qkv = snt.BatchApply(snt.LayerNorm())(qkv)
 
             # Queries, keys, and values
@@ -164,16 +222,13 @@ class RelationPool(snt.AbstractModule):
 
         # Residual
         if residual:
-            if context_source is None:
-                contexts += relations
-            else:
-                contexts += context_source
+            contexts += relations
 
         # Returns relational contexts
         return contexts, weights
 
     def _salience_sampling(self, weights, k, deterministic=False, uniform_sample=False):
-        """Discovering a relational context
+        """Indices based on 'salience sampling'
         Args:
             weights: weights for each relation to each relation
             k: number of relations to select and reduce to
@@ -182,9 +237,6 @@ class RelationPool(snt.AbstractModule):
         Returns:
             indices for k most salient
         """
-        self.weights = weights
-        self.bla = snt.BatchFlatten()(tf.reduce_sum(weights, axis=1))
-        self.blabla = snt.BatchFlatten()(tf.reduce_sum(weights, axis=2))
         # Saliences
         saliences = tf.reduce_sum(weights, axis=1)
         saliences /= tf.tile(tf.reduce_sum(saliences, axis=1)[:, tf.newaxis], [1, weights.shape[2]])
@@ -203,10 +255,83 @@ class RelationPool(snt.AbstractModule):
         # Reducing pool to most salient relations
         return top_k_indices
 
-    def _confidence_sampling(self, relations, contexts):
-        pass
+    def _confidence_sampling(self, relations, context, k, deterministic=False, uniform_sample=False):
+        """Indices based on 'confidence sampling'
+        Args:
+            relations, context
+            k: number of relations to select and reduce to
+            deterministic: whether to sample deterministically
+            uniform_sample: whether to sample uniformly
+        Returns:
+            indices for k most confident
+            predicted errors
+        """
+        # Concatenate relations with context
+        error_inference_source = tf.concat([relations, tf.tile(context[:, tf.newaxis, :], [1, relations.shape[1], 1])],
+                                           axis=-1)
 
-    def infer(self, desired_outputs, output_shape):
+        # Predicted errors of relations [B x N x 1]
+        predicted_error = snt.BatchApply(self._error_inference)(error_inference_source)
+
+        # Remove exxtra dimension
+        predicted_error = tf.squeeze(predicted_error, axis=2)
+
+        # Confidence
+        confidences = tf.nn.softmax(tf.divide(1, predicted_error), axis=1)
+
+        # Sampling
+        if not deterministic:
+            z = -tf.log(-tf.log(tf.random_uniform(tf.shape(confidences), 0, 1)))
+            confidences = tf.log(confidences) + z if not uniform_sample else z
+
+        # Indices of most salient
+        top_k_indices = tf.nn.top_k(confidences, k=k, sorted=True).indices
+        batch_size = tf.shape(top_k_indices)[0]
+        batch_indices = tf.tile(tf.range(batch_size)[:, tf.newaxis], (1, top_k_indices.shape[1]))
+        top_k_indices = tf.stack([batch_indices, top_k_indices], axis=-1)
+
+        # Indices of most confidence and predicted errors NOTE: they do not align if sampling enabled!
+        return top_k_indices, predicted_error
+
+    def infer_via_confidence_sampling(self, compute_error, desired_outputs, output_shape):
+        """Inference using relation pool
+        Args:
+            compute_error: function to compute error between batch of relations' predictions and desired outputs
+            desired_outputs: target labels
+            output_shape: shape of output
+        Returns:
+            predictions: model outputs
+            loss: all losses together
+        """
+        # Ensure built
+        self._ensure_is_connected()
+
+        # Predictions
+        inference_pred = snt.nets.mlp.MLP([self._entity_size, self._entity_size, self._entity_size, output_shape])
+        predictions = snt.BatchApply(inference_pred)(self._relations)
+
+        # Compute loss of each relation's prediction
+        errors = compute_error(predictions, desired_outputs)
+
+        # Index of predictor and predicted errors
+        index, predicted_errors = self._confidence_sampling(self._relations, self._global_context, 1)
+
+        # Predictor
+        final_relation = tf.gather_nd(self._relations, index)
+
+        # Prediction
+        prediction = inference_pred(tf.squeeze(final_relation, axis=1))
+
+        # Reshape predicted errors
+        predicted_errors = tf.reshape(predicted_errors, [-1])
+
+        # Loss
+        loss = tf.reduce_mean(errors) + tf.losses.mean_squared_error(errors, predicted_errors)
+
+        # Return prediction and loss
+        return prediction, loss
+
+    def infer_via_salience_sampling(self, desired_outputs, output_shape):
         """Inference using relation pool
         Args:
             desired_outputs: target labels

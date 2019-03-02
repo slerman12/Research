@@ -34,14 +34,15 @@ parser.add_argument('-aggregate_method', type=str, default="max")
 parser.add_argument('-epochs', type=int, default=10000)
 parser.add_argument('-episodes', type=int, default=10)
 parser.add_argument('-batch_dim', type=int, default=32)
-parser.add_argument('-logging', type=str2bool, default=False)
+parser.add_argument('-logging', type=str2bool, default=True)
 parser.add_argument('-saving', type=str2bool, default=True)
 parser.add_argument('-slurm', type=str2bool, default=False)
 args = parser.parse_args()
 print("\n", args, "\n")
 
 # Data reader
-reader = bAbI.Read(directory="bAbI_Dataset/tasks_1-20_v1-2/en-valid-10k", max_supporting=args.max_supporting)
+reader = bAbI.Read(directory="/Users/sam/Documents/Programming/Research/bAbI_Dataset/tasks_1-20_v1-2/en-valid-10k",
+                   max_supporting=args.max_supporting)
 
 # Inputs
 question = tf.placeholder(tf.int32, [None, reader.question_max_len], "Question")
@@ -83,14 +84,22 @@ entities = tf.concat([q, s_pos, s], axis=2)
 entity_mask = tf.sequence_mask(support_num, reader.supports_max_num)
 
 # MHDPA to get relations
-pool = RelationPool(entities=entities, k=10)
+pool = RelationPool(entities=entities, k=10, initiate_pool_mode="confidence_sampling")
 relations, contexts = pool(level=5)
 
+
 # Training loss
-# logits = snt.nets.mlp.MLP([256, 256, 256, 256, reader.vocab_size])(snt.BatchFlatten()(contexts))
-# loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=answer, logits=logits)
-# loss = tf.reduce_mean(loss)
-prediction, loss = pool.infer_via_salience_sampling(desired_outputs=answer, output_shape=reader.vocab_size)
+def compute_error(relation_preds, desired_outputs):
+    reshaped_relation_preds = tf.reshape(relation_preds, [-1, reader.vocab_size])
+    tiled_desired_outputs = tf.tile(desired_outputs[:, tf.newaxis], [1, relation_preds.shape[1]])
+    reshaped_desired_outputs = tf.reshape(tiled_desired_outputs, [-1])
+    error = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=reshaped_desired_outputs,
+                                                           logits=reshaped_relation_preds)
+    return error
+
+
+prediction, loss = pool.infer_via_confidence_sampling(compute_error=compute_error, desired_outputs=answer,
+                                                      output_shape=reader.vocab_size)
 
 # Accuracy
 correct = tf.equal(tf.argmax(prediction, 1), answer)

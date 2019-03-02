@@ -82,11 +82,22 @@ def run(images, label, batch_dim):
     entities = tf.reshape(final_concat, [-1, N*N, final_concat.shape[-1]])
 
     # MHDPA to get relations
-    pool = RelationPool(entities=entities, k=N)
+    pool = RelationPool(entities=entities, k=N, initiate_pool_mode="confidence_sampling")
     relations, contexts = pool(level=N)
 
+
+    def compute_error(relation_preds, desired_outputs):
+        reshaped_relation_preds = tf.reshape(relation_preds, [-1, 1623])
+        tiled_desired_outputs = tf.tile(desired_outputs[:, tf.newaxis], [1, relation_preds.shape[1]])
+        reshaped_desired_outputs = tf.reshape(tiled_desired_outputs, [-1])
+        error = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=reshaped_desired_outputs,
+                                                               logits=reshaped_relation_preds)
+        return error
+
+
     # Training loss
-    prediction, loss = pool.infer_via_salience_sampling(desired_outputs=label, output_shape=1623)
+    prediction, loss = pool.infer_via_confidence_sampling(compute_error=compute_error, desired_outputs=label,
+                                                          output_shape=1623)
 
     # Accuracy
     correct = tf.equal(tf.argmax(prediction, 1), label)
