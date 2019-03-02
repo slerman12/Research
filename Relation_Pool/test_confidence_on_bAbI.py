@@ -1,7 +1,11 @@
 import tensorflow as tf
 import sonnet as snt
 from relation_pool import RelationPool
-from ..bAbI_Dataset import bAbI
+import os,sys,inspect
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+from bAbI_Dataset import bAbI
 import os
 import argparse
 
