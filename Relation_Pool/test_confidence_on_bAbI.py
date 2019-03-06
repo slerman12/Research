@@ -1,6 +1,6 @@
 import tensorflow as tf
 import sonnet as snt
-from relation_pool import RelationPool
+from relation_pool_edit import RelationPool
 import os,sys,inspect
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_dir = os.path.dirname(current_dir)
@@ -38,7 +38,7 @@ parser.add_argument('-aggregate_method', type=str, default="max")
 parser.add_argument('-epochs', type=int, default=10000)
 parser.add_argument('-episodes', type=int, default=10)
 parser.add_argument('-batch_dim', type=int, default=32)
-parser.add_argument('-logging', type=str2bool, default=True)
+parser.add_argument('-logging', type=str2bool, default=False)
 parser.add_argument('-saving', type=str2bool, default=True)
 parser.add_argument('-slurm', type=str2bool, default=False)
 args = parser.parse_args()
@@ -88,23 +88,38 @@ entities = tf.concat([q, s_pos, s], axis=2)
 # Mask for padded supports
 entity_mask = tf.sequence_mask(support_num, reader.supports_max_num)
 
-# MHDPA to get relations
-pool = RelationPool(entities=entities, k=10, initiate_pool_mode="confidence_sampling")
-relations, contexts = pool(level=5)
-
 
 # Training loss
-def compute_error(relation_preds, desired_outputs):
+def compute_error(relation_preds):
     reshaped_relation_preds = tf.reshape(relation_preds, [-1, reader.vocab_size])
-    tiled_desired_outputs = tf.tile(desired_outputs[:, tf.newaxis], [1, relation_preds.shape[1]])
+    tiled_desired_outputs = tf.tile(answer[:, tf.newaxis], [1, relation_preds.shape[1]])
     reshaped_desired_outputs = tf.reshape(tiled_desired_outputs, [-1])
     error = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=reshaped_desired_outputs,
                                                            logits=reshaped_relation_preds)
-    return error
+    # return error
+    return tf.reshape(error, [-1, relation_preds.shape[1]])
 
 
-prediction, loss = pool.infer_via_confidence_sampling(compute_error=compute_error, desired_outputs=answer,
-                                                      output_shape=reader.vocab_size)
+# MHDPA to get relations
+# pool = RelationPool(entities=entities, k=10, initiate_pool_mode="confidence_sampling")
+pool = RelationPool(entities=entities, k=10, compute_error=compute_error, output_shape=reader.vocab_size,
+                    initiate_pool_mode="confidence_sampling")
+relations, contexts = pool(level=5)
+
+
+# # Training loss
+# def compute_error(relation_preds, desired_outputs):
+#     reshaped_relation_preds = tf.reshape(relation_preds, [-1, reader.vocab_size])
+#     tiled_desired_outputs = tf.tile(desired_outputs[:, tf.newaxis], [1, relation_preds.shape[1]])
+#     reshaped_desired_outputs = tf.reshape(tiled_desired_outputs, [-1])
+#     error = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=reshaped_desired_outputs,
+#                                                            logits=reshaped_relation_preds)
+#     # return error
+#     return tf.reshape(error, [-1, relation_preds.shape[1]])
+
+# prediction, loss = pool._infer_via_confidence_sampling(compute_error=compute_error, desired_outputs=answer,
+#                                                        output_shape=reader.vocab_size)
+prediction, loss = pool._output_via_confidence_sampling()
 
 # Accuracy
 correct = tf.equal(tf.argmax(prediction, 1), answer)

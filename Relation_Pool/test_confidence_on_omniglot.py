@@ -96,8 +96,8 @@ def run(images, label, batch_dim):
 
 
     # Training loss
-    prediction, loss = pool.infer_via_confidence_sampling(compute_error=compute_error, desired_outputs=label,
-                                                          output_shape=1623)
+    prediction, loss = pool._output_via_confidence_sampling(compute_error=compute_error, desired_outputs=label,
+                                                            output_shape=1623)
 
     # Accuracy
     correct = tf.equal(tf.argmax(prediction, 1), label)

@@ -28,7 +28,7 @@ class RelationPool(snt.AbstractModule):
         self._global_context = self._aggregate(contexts, mode=aggregation_mode)
 
         # Error inference for confidence sampling
-        self._error_inference = snt.nets.mlp.MLP([256, 256, 64, 64, 1])
+        self._infer_confidence = snt.nets.mlp.MLP([256, 256, 256, 256, 1])
 
         # Get indices of entities k most salient
         if initiate_pool_mode == "salience_sampling":
@@ -67,7 +67,7 @@ class RelationPool(snt.AbstractModule):
         relations_represented = self._relation_representation(relations_pairwise)
 
         # Return top k indices
-        indices, _ = self._confidence_sampling(relations_represented, self._global_context, self.k)
+        indices, _ = self._confidence_sampling(relations_represented, self._global_context, self._k)
 
         # Top k relations
         relations = tf.gather_nd(relations_represented, indices)
@@ -227,6 +227,21 @@ class RelationPool(snt.AbstractModule):
         # Returns relational contexts
         return contexts, weights
 
+    def _attend_one_to_many(self, one, many):
+        # Linearly project query [B x E]
+        query = snt.nets.mlp.MLP([self._entity_size] * 2)(one)
+        query = snt.LayerNorm()(query)
+
+        # Linearly project keys [B x N x E]
+        keys = snt.BatchApply(snt.Linear(self._entity_size))(many)
+        keys = snt.BatchApply(snt.LayerNorm())(keys)
+
+        # Weights [B x N x 1]
+        weights = tf.nn.softmax(tf.matmul(query[:, tf.newaxis, :], keys, transpose_b=True))
+
+        # [B x N]
+        return tf.squeeze(weights, axxis=2)
+
     def _salience_sampling(self, weights, k, deterministic=False, uniform_sample=False):
         """Indices based on 'salience sampling'
         Args:
@@ -267,33 +282,43 @@ class RelationPool(snt.AbstractModule):
             predicted errors
         """
         # Concatenate relations with context
-        error_inference_source = tf.concat([relations, tf.tile(context[:, tf.newaxis, :], [1, relations.shape[1], 1])],
-                                           axis=-1)
+        relation_paired_with_context = tf.concat([relations, tf.tile(context[:, tf.newaxis, :],
+                                                                     [1, relations.shape[1], 1])], axis=-1)
+        # error_inference_source = tf.concat([tf.stop_gradient(relations),
+        #                                     tf.tile(context[:, tf.newaxis, :], [1, relations.shape[1], 1])], axis=-1)
 
-        # Predicted errors of relations [B x N x 1]
-        predicted_error = snt.BatchApply(self._error_inference)(error_inference_source)
+        # # Predicted errors of relations [B x N x 1]
+        # predicted_error = snt.BatchApply(self._error_inference)(error_inference_source)
+        #
+        # # Remove extra dimension
+        # predicted_error = tf.squeeze(predicted_error, axis=2)
+        #
+        # # Confidence
+        # confidences = tf.nn.softmax(tf.divide(1, predicted_error), axis=1)
 
-        # Remove exxtra dimension
-        predicted_error = tf.squeeze(predicted_error, axis=2)
+        # Predicted confidence of relations [B x N x 1] -> [B x N]
+        confidences = confidence_sampled = tf.nn.softmax(tf.squeeze(snt.BatchApply(self._infer_confidence)(
+            relation_paired_with_context), axis=2), axis=1)
 
-        # Confidence
-        confidences = tf.nn.softmax(tf.divide(1, predicted_error), axis=1)
+        print(confidences)
+        # confidences = confidence_sampled = tf.nn.softmax(tf.squeeze(snt.BatchApply(self._infer_confidence)(
+        #     tf.stop_gradient(relation_paired_with_context)), axis=2), axis=1)
 
         # Sampling
         if not deterministic:
             z = -tf.log(-tf.log(tf.random_uniform(tf.shape(confidences), 0, 1)))
-            confidences = tf.log(confidences) + z if not uniform_sample else z
+            confidence_sampled = tf.log(confidences) + z if not uniform_sample else z
 
         # Indices of most salient
-        top_k_indices = tf.nn.top_k(confidences, k=k, sorted=True).indices
+        top_k_indices = tf.nn.top_k(confidence_sampled, k=k, sorted=True).indices
         batch_size = tf.shape(top_k_indices)[0]
         batch_indices = tf.tile(tf.range(batch_size)[:, tf.newaxis], (1, top_k_indices.shape[1]))
         top_k_indices = tf.stack([batch_indices, top_k_indices], axis=-1)
 
         # Indices of most confidence and predicted errors NOTE: they do not align if sampling enabled!
-        return top_k_indices, predicted_error
+        return top_k_indices, confidences
 
-    def infer_via_confidence_sampling(self, compute_error, desired_outputs, output_shape):
+    def _infer_via_confidence_sampling(self, compute_error, desired_outputs, output_shape):
         """Inference using relation pool
         Args:
             compute_error: function to compute error between batch of relations' predictions and desired outputs
@@ -307,14 +332,18 @@ class RelationPool(snt.AbstractModule):
         self._ensure_is_connected()
 
         # Predictions
-        inference_pred = snt.nets.mlp.MLP([self._entity_size, self._entity_size, self._entity_size, output_shape])
+        inference_pred = snt.nets.mlp.MLP([256, 256, 256, 256, output_shape])
         predictions = snt.BatchApply(inference_pred)(self._relations)
 
         # Compute loss of each relation's prediction
         errors = compute_error(predictions, desired_outputs)
 
         # Index of predictor and predicted errors
-        index, predicted_errors = self._confidence_sampling(self._relations, self._global_context, 1)
+        index, confidences = self._confidence_sampling(self._relations, self._global_context, 1)
+
+        # indices, _ = self._confidence_sampling(self._relations, self._global_context, 10)
+        # preds = snt.BatchApply(inference_pred)(tf.gather_nd(self._relations, indices))
+        # final_errors = compute_error(preds, desired_outputs)
 
         # Predictor
         final_relation = tf.gather_nd(self._relations, index)
@@ -323,10 +352,20 @@ class RelationPool(snt.AbstractModule):
         prediction = inference_pred(tf.squeeze(final_relation, axis=1))
 
         # Reshape predicted errors
-        predicted_errors = tf.reshape(predicted_errors, [-1])
+        # predicted_errors = tf.reshape(predicted_errors, [-1])
+
+        # context_prediction = snt.nets.mlp.MLP([256, 256, 256, 256, output_shape])(self._global_context)
+        # context_loss = compute_error(context_prediction[:, tf.newaxis, :], desired_outputs)
+        # context_loss = tf.reduce_mean(context_loss)
 
         # Loss
-        loss = tf.reduce_mean(errors) + tf.losses.mean_squared_error(errors, predicted_errors)
+        # loss = tf.reduce_mean(errors) + tf.losses.mean_squared_error(errors, predicted_errors)
+        # loss = tf.reduce_mean(final_errors) + tf.losses.mean_squared_error(errors, predicted_errors)
+        # loss = tf.reduce_mean(final_errors) + tf.losses.mean_squared_error(tf.stop_gradient(errors), predicted_errors)
+        # loss = tf.reduce_mean(errors) + tf.losses.mean_squared_error(tf.stop_gradient(errors), predicted_errors)
+        # errors: [B x N], predicted_errors: [B x N]
+        loss = tf.reduce_mean(errors * confidences)
+        # loss = tf.reduce_mean(errors * confidences) + context_loss
 
         # Return prediction and loss
         return prediction, loss

@@ -86,7 +86,7 @@ def run(images, label, batch_dim):
     relations, contexts = pool(level=N)
 
     # Training loss
-    prediction, loss = pool.infer_via_salience_sampling(desired_outputs=label, output_shape=1623)
+    prediction, loss = pool._output_via_salience_sampling(desired_outputs=label, output_shape=1623)
 
     # Accuracy
     correct = tf.equal(tf.argmax(prediction, 1), label)

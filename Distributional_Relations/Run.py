@@ -27,7 +27,7 @@ parser.add_argument('-support_embed_size', type=int, default=32)
 parser.add_argument('-mhdpa_key_size', type=int, default=64)
 parser.add_argument('-mhdpa_value_size', type=int, default=64)
 parser.add_argument('-distributional', type=str2bool, default=True)
-parser.add_argument('-top_k', type=int, default=3)
+parser.add_argument('-top_k', type=int, default=10)
 parser.add_argument('-sample', type=str2bool, default=True)
 parser.add_argument('-uniform_sample', type=str2bool, default=False)
 parser.add_argument('-aggregate_method', type=str, default="max")
@@ -41,7 +41,9 @@ args = parser.parse_args()
 print("\n", args, "\n")
 
 # Data reader
-reader = bAbI.Read(max_supporting=args.max_supporting)
+path = os.getcwd() + "/../bAbI_Dataset/tasks_1-20_v1-2/en-valid-10k"
+reader = bAbI.Read(directory=path,
+                   max_supporting=args.max_supporting)
 
 # Inputs
 question = tf.placeholder(tf.int32, [None, reader.question_max_len], "Question")
