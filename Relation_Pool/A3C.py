@@ -11,14 +11,17 @@
 import numpy as np
 import tensorflow as tf
 
-import gym, time, random, threading
+import gym, time, random, threading, retro
+import retrowrapper
 
 from keras.models import *
 from keras.layers import *
 from keras import backend as K
+from keras.layers.convolutional import Conv2D
 
 # -- constants
-ENV = 'CartPole-v0'
+ENV = 'SonicTheHedgehog-Genesis'
+STATE = 'SpringYardZone.Act1'
 
 RUN_TIME = 30
 THREADS = 8
@@ -41,6 +44,28 @@ LOSS_V = .5  # v loss coefficient
 LOSS_ENTROPY = .01  # entropy coefficient
 
 
+class SonicDiscretizer(gym.ActionWrapper):
+    """
+    Wrap a gym-retro environment and make it use discrete
+    actions for the Sonic game.
+    """
+    def __init__(self, env):
+        super(SonicDiscretizer, self).__init__(env)
+        buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+        actions = [['LEFT'], ['RIGHT'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'],
+                   ['DOWN', 'B'], ['B'], ['UP']] #adding UP
+        self._actions = []
+        for action in actions:
+            arr = np.array([False] * 12)
+            for button in action:
+                arr[buttons.index(button)] = True
+            self._actions.append(arr)
+        self.action_space = gym.spaces.Discrete(len(self._actions))
+
+    def action(self, a): # pylint: disable=W0221
+        return self._actions[a].copy()
+
+
 # ---------
 class Brain:
     train_queue = [[], [], [], [], []]  # s, a, r, s', s' terminal mask
@@ -61,8 +86,22 @@ class Brain:
 
     def _build_model(self):
 
-        l_input = Input(batch_shape=(None, NUM_STATE))
-        l_dense = Dense(16, activation='relu')(l_input)
+        l_input = Input(batch_shape=(None, STATE_SPACE[0], STATE_SPACE[1], STATE_SPACE[2]))
+
+        kernel_size = 3
+        stride_size = 2
+        # model = Conv2D(62, (5, 5), strides=(stride_size, stride_size),activation='relu',input_shape=(75, 75, 3), data_format='channels_last')(tf.cast(images, tf.float32))
+        model = Conv2D(62, (5, 5), strides=(stride_size, stride_size),activation='relu')(tf.cast(l_input, tf.float32))
+        # model = BatchNormalization()(model)
+        model = Conv2D(62, (5, 5), strides=(stride_size, stride_size),activation='relu')(model)
+        # model = BatchNormalization()(model)
+        model = Conv2D(62, (kernel_size, kernel_size), strides=(stride_size, stride_size),activation='relu')(model)
+        # model = BatchNormalization()(model)
+        image_representations = Conv2D(62, (3, 3), strides=(1, 1),activation='relu')(model)
+
+        flatten = Flatten()(image_representations)
+
+        l_dense = Dense(16, activation='relu')(flatten)
 
         out_actions = Dense(NUM_ACTIONS, activation='softmax')(l_dense)
         out_value = Dense(1, activation='linear')(l_dense)
@@ -73,7 +112,7 @@ class Brain:
         return model
 
     def _build_graph(self, model):
-        s_t = tf.placeholder(tf.float32, shape=(None, NUM_STATE))
+        s_t = tf.placeholder(tf.float32, shape=(None, STATE_SPACE[0], STATE_SPACE[1], STATE_SPACE[2]))
         a_t = tf.placeholder(tf.float32, shape=(None, NUM_ACTIONS))
         r_t = tf.placeholder(tf.float32, shape=(None, 1))  # not immediate, but discounted n step reward
 
@@ -89,7 +128,7 @@ class Brain:
 
         loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
 
-        optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
+        optimizer = tf.train.AdamOptimizer(LEARNING_RATE)
         minimize = optimizer.minimize(loss_total)
 
         return s_t, a_t, r_t, minimize
@@ -106,13 +145,14 @@ class Brain:
             s, a, r, s_, s_mask = self.train_queue
             self.train_queue = [[], [], [], [], []]
 
-        s = np.vstack(s)
+        s = np.array(s)
         a = np.vstack(a)
+        print(a[0])
         r = np.vstack(r)
-        s_ = np.vstack(s_)
+        s_ = np.array(s_)  # TODO is it okay that I'm using array instead of vstack here and above?
         s_mask = np.vstack(s_mask)
 
-        # if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
+        if len(s) > 5 * MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
 
         v = self.predict_v(s_)
         r = r + GAMMA_N * v * s_mask  # set v to 0 where s_ is terminal state
@@ -230,7 +270,8 @@ class Environment(threading.Thread):
         self.render = render
         self.print_interval = print_interval
         self.num_episodes = 0
-        self.env = gym.make(ENV)
+        self.env = retrowrapper.RetroWrapper(ENV, state=STATE)
+        self.env = SonicDiscretizer(self.env)
         self.agent = Agent(eps_start, eps_end, eps_steps)
 
     def run_episode(self):
@@ -244,6 +285,8 @@ class Environment(threading.Thread):
                 self.env.render()
 
             a = self.agent.act(s)
+            print(a)
+
             s_, r, done, info = self.env.step(a)
 
             if done:  # terminal state
@@ -297,6 +340,7 @@ class Optimizer(threading.Thread):
 # -- main
 env_test = Environment(render=False, eps_start=0., eps_end=0.)
 NUM_STATE = env_test.env.observation_space.shape[0]
+STATE_SPACE = env_test.env.observation_space.shape
 NUM_ACTIONS = env_test.env.action_space.n
 NONE_STATE = np.zeros(NUM_STATE)
 

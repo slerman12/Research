@@ -89,6 +89,7 @@ entities = tf.concat([q, s_pos, s], axis=2)
 entity_mask = tf.sequence_mask(support_num, reader.supports_max_num)
 
 mode = "confidence"
+aggregate_preds = False
 print(mode)
 
 inference_module = snt.nets.mlp.MLP([64, 64, reader.vocab_size])
@@ -96,7 +97,7 @@ context_predictor = snt.nets.mlp.MLP([64, reader.vocab_size])
 
 
 # Training loss
-def error(relations_or_contexts, mode="relations"):
+def error(relations_or_contexts, mode="relations", confidences=None):
     # Predictor
     if mode == "relations":
         predictor = inference_module
@@ -108,26 +109,45 @@ def error(relations_or_contexts, mode="relations"):
     pred = snt.BatchApply(predictor)(relations_or_contexts)
 
     # Reshaped predictions and desired outputs for error computation
-    reshaped_pred = tf.reshape(pred, [-1, reader.vocab_size])
-    reshaped_desired_outputs = tf.reshape(tf.tile(answer[:, tf.newaxis], [1, pred.shape[1]]), [-1])
+    if confidences is None:
+        pred = tf.reshape(pred, [-1, reader.vocab_size])
+        desired_outputs = tf.reshape(tf.tile(answer[:, tf.newaxis], [1, pred.shape[1]]), [-1])
+    else:
+        pred = tf.reduce_sum(pred * confidences, axis=1)
+        desired_outputs = answer
 
     # Errors
-    errors = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=reshaped_desired_outputs, logits=reshaped_pred)
+    errors = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=desired_outputs, logits=pred)
 
     # Return errors in original shape
-    return tf.reshape(errors, [-1, pred.shape[1]])
+    if confidences is None:
+        return tf.reshape(errors, [-1, pred.shape[1]])
+    else:
+        return errors
 
 
 # error_module = snt.Module(error)
 
 # Initiate pool
-pool = RelationPool(k=10, level=5, error_func=error, mode=mode, context_aggregation="lstm")
+pool = RelationPool(k=10, level=5, error_func=error, mode=mode, context_aggregation="lstm",
+                    aggregate_preds=True)
+# 1 small lstm, 2 mhdpa, 3 regular (big lstm) 4 same but edited for next 5 basic relation representation
 
 # Run relation pool module
-relation = pool(entities)
+relations, weights = pool(entities)
 
-# Prediction
-prediction = inference_module(relation)
+# If aggregating predictions
+if aggregate_preds:
+    # Aggregate predictions
+    prediction = inference_module(tf.reduce_sum(relations * weights, axis=1))
+else:
+    # Highest weight relation
+    batch_range = tf.range(tf.shape(relations)[0])
+    first_index_of_each_batch = tf.stack([batch_range, tf.zeros(tf.shape(relations)[0], tf.int32)], axis=1)
+    relation = tf.gather_nd(relations, first_index_of_each_batch)
+
+    # Prediction
+    prediction = inference_module(relation)
 
 # Loss
 loss = pool.loss

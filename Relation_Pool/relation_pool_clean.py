@@ -3,7 +3,8 @@ import sonnet as snt
 
 
 class RelationPool(snt.AbstractModule):
-    def __init__(self, k, level, error_func, context_aggregation="max_pool", mode="salience", name="relation_pool"):
+    def __init__(self, k, level, error_func, context_aggregation="max_pool", mode="salience",
+                 aggregate_preds=False, name="relation_pool"):
         """Initialize pool with passed in entities
         Args:
             entities: original entities to be related
@@ -24,6 +25,9 @@ class RelationPool(snt.AbstractModule):
 
         # Pool mode
         self._mode = mode
+
+        # Whether to aggregate predictions
+        self._aggregate_preds = aggregate_preds
 
         # Loss
         self.loss = tf.constant(0, dtype=tf.float32)
@@ -48,17 +52,19 @@ class RelationPool(snt.AbstractModule):
         if self._aggregation == "lstm":
             # For lstm, add contexts to loss, then pass ordered entities to self._aggregate
             self.add_contexts_to_loss(contexts)
-            indices = self._salience_sampling(weights, deterministic=True)
+            indices, _ = self._salience_sampling(weights, deterministic=True)
             self._global_context = self._aggregate(tf.reverse(tf.gather_nd(self._entities, indices), [1]), mode="lstm")
+        elif self._aggregation == "basic":
+            self._global_context = self._basic_relation_representation(self._entities)
         else:
             self._global_context = self._aggregate(contexts, mode=self._aggregation)
 
         # Get indices of entities k most salient
         if self._mode == "salience":
-            indices = self._salience_sampling(weights, self._k)
+            indices, _ = self._salience_sampling(weights, self._k)
             self._contexts = tf.gather_nd(contexts, indices)
         elif self._mode == "confidence":
-            indices = self._confidence_sampling(self._entities, self._global_context, self._k)
+            indices, _ = self._confidence_sampling(self._entities, self._global_context, self._k)
 
         # Relations and highest level
         self._relations = self._highest_level_relations = tf.gather_nd(self._entities, indices)
@@ -83,10 +89,10 @@ class RelationPool(snt.AbstractModule):
         relations_pairwise = self._pairwise_with_entities(self._highest_level_relations)
 
         # Represent relations
-        relations_represented = self._relation_representation(relations_pairwise)
+        relations_represented = self._represent_relations_of_entities(relations_pairwise)
 
         # Return top k indices
-        indices = self._confidence_sampling(relations_represented, self._global_context, self._k)
+        indices, _ = self._confidence_sampling(relations_represented, self._global_context, self._k)
 
         # Top k relations
         relations = tf.gather_nd(relations_represented, indices)
@@ -110,13 +116,13 @@ class RelationPool(snt.AbstractModule):
         relations_pairwise = self._pairwise_with_entities(self._highest_level_relations)
 
         # Represent relations
-        relations_represented = self._relation_representation(relations_pairwise)
+        relations_represented = self._represent_relations_of_entities(relations_pairwise)
 
         # Discover contexts (Note: self attention is performed level-wise, not on entities as the context source)
         contexts, weights = self._discover_relational_context(relations_represented)
 
         # Return top k indices
-        indices = self._salience_sampling(weights, self._k)
+        indices, _ = self._salience_sampling(weights, self._k)
 
         # Top k relations and contexts
         relations = tf.gather_nd(relations_represented, indices)
@@ -152,24 +158,37 @@ class RelationPool(snt.AbstractModule):
 
         return relations
 
-    def _relation_representation(self, relations):
-        """Represent concatenated entities as a relation representation
+    def _basic_relation_representation(self, relations):
+        """Represent entities as a basic relation representation
         Args:
             relations
         Returns:
             relation_representations: each relation represented
         """
         # Run an MLP over each entity in relation
-        mlp_entities = snt.BatchApply(snt.nets.mlp.MLP([self._entity_size] * 4), n_dims=3)(relations)
+        mlp_entities = snt.BatchApply(snt.nets.mlp.MLP([self._entity_size] * 4))(relations)
 
         # Aggregate the MLP'ed entities
-        entity_aggregation = tf.reduce_sum(mlp_entities, axis=2)
+        entity_aggregation = tf.reduce_sum(mlp_entities, axis=1)
 
         # MLP the aggregation to get final representation of relation
-        relation_representations = snt.BatchApply(snt.nets.mlp.MLP([self._entity_size] * 2))(entity_aggregation)
+        relation_representations = snt.nets.mlp.MLP([self._entity_size] * 2)(entity_aggregation)
 
         # Return representations
         return relation_representations
+
+        # return self._self_attention(relations)
+
+    def _represent_relations_of_entities(self, relations):
+        """Represent concatenated entities as a relation representation
+        Args:
+            relations
+        Returns:
+            Each relation represented
+        """
+        # Return representations
+        return snt.BatchApply(self._basic_relation_representation)(relations)
+        # return snt.BatchApply(self._self_attention)(relations)
 
     def _aggregate(self, to_aggregate, mode="max_pool"):
         """Aggregate inputs
@@ -187,7 +206,7 @@ class RelationPool(snt.AbstractModule):
         elif mode == "concat":
             aggregate = snt.BatchFlatten()(to_aggregate)
         elif mode == "lstm":
-            lstm = tf.nn.rnn_cell.LSTMCell(self._entity_size * 4, forget_bias=2.0, use_peepholes=True, state_is_tuple=True)
+            lstm = tf.nn.rnn_cell.LSTMCell(self._entity_size, forget_bias=2.0, use_peepholes=True, state_is_tuple=True)
             _, state = tf.nn.dynamic_rnn(lstm, to_aggregate, dtype=tf.float32)
             aggregate = state.h
         return aggregate
@@ -279,6 +298,16 @@ class RelationPool(snt.AbstractModule):
         # [B x N]
         return tf.squeeze(weights, axis=2)
 
+    def _self_attention(self, attending):
+        """Self attention
+        Args:
+            attending: items to do self-attention on
+        Returns:
+            attended
+        """
+        contexts, _ = self._discover_relational_context(attending)
+        return self._aggregate(contexts)
+
     def _salience_sampling(self, weights, k=None, deterministic=False, uniform_sample=False):
         """Indices based on 'salience sampling'
         Args:
@@ -298,7 +327,7 @@ class RelationPool(snt.AbstractModule):
         saliences /= tf.tile(tf.reduce_sum(saliences, axis=1)[:, tf.newaxis], [1, weights.shape[2]])
 
         # Sampling
-        return self.sample(saliences, k, deterministic, uniform_sample)
+        return self.sample(saliences, k, deterministic, uniform_sample), saliences
 
     def _confidence_sampling(self, relations, context, k, deterministic=False, uniform_sample=False):
         """Indices based on 'confidence sampling'
@@ -312,21 +341,24 @@ class RelationPool(snt.AbstractModule):
             predicted errors
         """
         # Attend context to relations
-        # weights = self._attend_one_to_many(context, relations)
-        contexts, weights = self._discover_relational_context(context[:, tf.newaxis, :], relations, residual=False)
+        weights = self._attend_one_to_many(context, relations)
+        # contexts, weights = self._discover_relational_context(context[:, tf.newaxis, :], relations, residual=False)
 
         # Add contexts to loss
         # self.add_contexts_to_loss(contexts)
 
         # Confidence probas
-        # confidences = tf.nn.softmax(weights, axis=1)
-        confidences = tf.squeeze(weights, axis=1)
+        confidences = tf.nn.softmax(weights, axis=1)
+        # confidences = tf.squeeze(weights, axis=1)
 
         # Add to loss
-        self._add_confidences_to_loss(confidences, relations)
+        if self._aggregate_preds:
+            self._add_aggregate_loss(confidences, relations)
+        else:
+            self._add_confidences_to_loss(confidences, relations)
 
         # Sampling
-        return self.sample(confidences, k, deterministic, uniform_sample)
+        return self.sample(confidences, k, deterministic, uniform_sample), confidences
 
     def sample(self, probas, k, deterministic, uniform_sample):
         # Sampling
@@ -342,6 +374,14 @@ class RelationPool(snt.AbstractModule):
 
         # Indices of most confidence and confidences
         return top_k_indices
+
+    def _add_aggregate_loss(self, confidences, relations):
+        """Confidence sampling loss (aggregate predictions)
+        Args:
+            confidences, relations
+        """
+        errors = self._error_func(relations, confidences=confidences)
+        self.loss += tf.reduce_mean(errors)
 
     def _add_confidences_to_loss(self, confidences, relations):
         """Confidence sampling loss
@@ -375,18 +415,19 @@ class RelationPool(snt.AbstractModule):
             final_relation: model output
         """
         # Index of predictor and predicted errors
-        indices = self._confidence_sampling(self._relations, self._global_context, self._k)
+        indices, confidences = self._confidence_sampling(self._relations, self._global_context, self._k)
 
         # Most confident relations
         final_relations = tf.gather_nd(self._relations, indices)
+        final_confidences = tf.gather_nd(confidences, indices)
 
-        # Most confident relation
-        batch_range = tf.range(tf.shape(final_relations)[0])
-        first_index_of_each_batch = tf.stack([batch_range, tf.zeros(tf.shape(final_relations)[0], tf.int32)], axis=1)
-        final_relation = tf.gather_nd(final_relations, first_index_of_each_batch)
+        # # Most confident relation
+        # batch_range = tf.range(tf.shape(final_relations)[0])
+        # first_index_of_each_batch = tf.stack([batch_range, tf.zeros(tf.shape(final_relations)[0], tf.int32)], axis=1)
+        # final_relation = tf.gather_nd(final_relations, first_index_of_each_batch)
 
         # Return prediction and loss
-        return final_relation
+        return final_relations, final_confidences
 
     def _output_via_salience_sampling(self):
         """Output using relation pool
@@ -395,10 +436,11 @@ class RelationPool(snt.AbstractModule):
         """
         # Most salient indices for relations in pool
         contexts, weights = self._discover_relational_context(self._relations)
-        indices = self._salience_sampling(weights, self._k)
+        indices, saliences = self._salience_sampling(weights, self._k)
 
         # Most salient relations
         final_relations = tf.gather_nd(self._relations, indices)
+        final_saliences = tf.gather_nd(saliences, indices)
 
         # Their associated contexts
         final_contexts = tf.gather_nd(contexts, indices)
@@ -411,12 +453,12 @@ class RelationPool(snt.AbstractModule):
         self.add_contexts_to_loss(all_contexts)
 
         # Most salient relation
-        batch_range = tf.range(tf.shape(final_relations)[0])
-        first_index_of_each_batch = tf.stack([batch_range, tf.zeros(tf.shape(final_relations)[0], tf.int32)], axis=1)
-        final_relation = tf.gather_nd(final_relations, first_index_of_each_batch)
+        # batch_range = tf.range(tf.shape(final_relations)[0])
+        # first_index_of_each_batch = tf.stack([batch_range, tf.zeros(tf.shape(final_relations)[0], tf.int32)], axis=1)
+        # final_relation = tf.gather_nd(final_relations, first_index_of_each_batch)
 
         # Return prediction and loss
-        return final_relation
+        return final_relations, saliences
 
 
 
