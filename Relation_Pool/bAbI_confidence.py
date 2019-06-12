@@ -1,6 +1,6 @@
 import tensorflow as tf
 import sonnet as snt
-from Relation_Pool.relation_pool_clean import RelationPool
+from Relation_Pool.relation_pool_sleek import RelationPool
 import os, sys, inspect
 
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -151,7 +151,7 @@ def error(relations_or_contexts, mode="relations", confidences=None, inference_f
 
 # Initiate pool
 pool = RelationPool(k=10, level=5, error_func=error, mode=mode, context_aggregation="lstm",
-                    aggregate_preds=False, generate_experts=True)
+                    aggregate_preds=False, generate_experts=False)
 
 # Run relation pool module
 relations, weights = pool(entities)

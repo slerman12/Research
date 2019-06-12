@@ -70,7 +70,14 @@ class RelationPool(snt.AbstractModule):
 
         # If generating experts, generate context query from global context
         if self._generate_experts:
-            self._context_query = snt.Linear(64)(self._global_context)
+            self._context_query = snt.Linear(self._entity_size)(self._global_context)
+
+        # Global query for valuing confidence of relations
+        self._context_query_for_valuing_relations = snt.Linear(self._entity_size)(self._global_context)
+        self._context_query_for_valuing_relations = snt.LayerNorm()(self._context_query_for_valuing_relations)
+        self._context_query_for_valuing_relations *= self._entity_size ** -0.5
+        # Global key for valuing confidence of relations
+        self._key_generator_for_valuing_relations = snt.BatchApply(snt.Linear(self._entity_size))
 
         # Get indices of entities k most salient
         if self._mode == "salience":
@@ -297,18 +304,19 @@ class RelationPool(snt.AbstractModule):
             weights: weights for each item of many
         """
         # Linearly project query [B x E]
-        query = snt.nets.mlp.MLP([self._entity_size])(one)
-        query = snt.LayerNorm()(query)
+        # query = snt.nets.mlp.MLP([self._entity_size])(one)
+        # query = snt.LayerNorm()(query)
 
         # Normalize (even out relation distribution; sqrt due to softmax exponential)
-        query *= self._entity_size ** -0.5
+        # query *= self._entity_size ** -0.5
 
         # Linearly project keys [B x N x E]
-        keys = snt.BatchApply(snt.Linear(self._entity_size))(many)
+        keys = self._key_generator_for_valuing_relations(many)
         keys = snt.BatchApply(snt.LayerNorm())(keys)
 
         # Weights [B x N x 1]
-        weights = tf.matmul(keys, query[:, tf.newaxis, :], transpose_b=True)
+        # weights = tf.matmul(keys, query[:, tf.newaxis, :], transpose_b=True)
+        weights = tf.matmul(keys, self._context_query_for_valuing_relations[:, tf.newaxis, :], transpose_b=True)
 
         # [B x N]
         return tf.squeeze(weights, axis=2)
@@ -344,7 +352,7 @@ class RelationPool(snt.AbstractModule):
         # Sampling
         return self.sample(saliences, k, deterministic, uniform_sample), saliences
 
-    def _confidence_sampling(self, relations, context, k, deterministic=False, uniform_sample=False):
+    def _confidence_sampling(self, relations, context, k, deterministic=False, uniform_sample=False, add_to_loss=False):
         """Indices based on 'confidence sampling'
         Args:
             relations, context
@@ -367,13 +375,14 @@ class RelationPool(snt.AbstractModule):
         # confidences = tf.squeeze(weights, axis=1)
 
         # Add to loss
-        if self._aggregate_preds:
-            self._add_aggregate_loss(confidences, relations)
-        else:
-            self._add_confidences_to_loss(confidences, relations)
+        if add_to_loss:
+            if self._aggregate_preds:
+                self._add_aggregate_loss(confidences, relations)
+            else:
+                self._add_confidences_to_loss(confidences, relations)
 
-        if self._generate_experts:
-            self._add_experts_to_loss(confidences, relations, inference_func=True)
+            if self._generate_experts:
+                self._add_experts_to_loss(confidences, relations, inference_func=True)
 
         # Sampling
         return self.sample(confidences, k, deterministic, uniform_sample), confidences
@@ -445,7 +454,8 @@ class RelationPool(snt.AbstractModule):
             final_relation: model output
         """
         # Index of predictor and predicted errors
-        indices, confidences = self._confidence_sampling(self._relations, self._global_context, self._k)
+        indices, confidences = self._confidence_sampling(self._relations, self._global_context, self._k,
+                                                         add_to_loss=True)
 
         # Most confident relations
         final_relations = tf.gather_nd(self._relations, indices)

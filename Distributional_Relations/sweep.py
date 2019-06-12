@@ -215,7 +215,8 @@ def graph_babi(data, data_valids):
 
     plotly.plot(fig, filename='bAbI_salience_sampling_bar_chart.html',
                 image='png', image_filename='bAbI_salience_sampling_bar_chart',
-                image_height=900, image_width=1300)
+                image_height=800, image_width=1300)
+    return
 
     distributional_groups = {'Sampled<br>- Salience<br>- Concat': lambda param: "-distributional False" not in param and
                                                                                 "-sample False" not in param and

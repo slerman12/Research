@@ -188,8 +188,6 @@ class Runner(AbstractEnvRunner):
         mb_dones = np.asarray(mb_dones, dtype=np.bool)
         last_values = self.model.value(self.obs)
 
-        avg_score = np.mean(np.sum(mb_rewards, 0))
-
         ### GENERALIZED ADVANTAGE ESTIMATION
         # discount/bootstrap off value fn
         # We create mb_returns and mb_advantages
@@ -228,7 +226,7 @@ class Runner(AbstractEnvRunner):
         # Returns
         mb_returns = mb_advantages + mb_values
 
-        return map(sf01, (mb_obs, mb_actions, mb_returns, mb_values)), avg_score
+        return map(sf01, (mb_obs, mb_actions, mb_returns, mb_values))
 
 
 def sf01(arr):
@@ -249,13 +247,9 @@ def learn(policy,
           ent_coef,
           lr,
           max_grad_norm,
-          log_interval,
-          name):
-    # noptepochs = 4
-    # nminibatches = 8
-
-    noptepochs = 1
-    nminibatches = 1
+          log_interval):
+    noptepochs = 4
+    nminibatches = 8
 
     # Get the nb of env
     nenvs = env.num_envs
@@ -283,7 +277,7 @@ def learn(policy,
 
     # Load the model
     # If you want to continue training
-    load_path = "./Saved/{}/".format(name)
+    load_path = "./Saved/"
     ckpt_name = "model.ckpt"
     model.load(load_path, ckpt_name)
 
@@ -298,14 +292,7 @@ def learn(policy,
         tstart = time.time()
 
         # Get minibatch
-        (obs, actions, returns, values), avg_score = runner.run()
-
-        # print("returns shape")
-        # print(returns.shape)
-        # print("Sum over first axis, avg over second")
-        # print(np.mean(np.sum(returns, 0)))
-        # print("Sum divided by num envs")
-        # print(np.sum(returns, 0) / nenvs)
+        obs, actions, returns, values = runner.run()
 
         # Here what we're going to do is for each minibatch calculate the loss and append it.
         mb_losses = []
@@ -315,7 +302,6 @@ def learn(policy,
         # Create the indices array
         indices = np.arange(batch_size)
 
-        # Training loop
         for _ in range(noptepochs):
             # Randomize the indexes
             np.random.shuffle(indices)
@@ -353,18 +339,17 @@ def learn(policy,
             logger.record_tabular("policy_entropy", float(lossvalues[2]))
             logger.record_tabular("value_loss", float(lossvalues[1]))
             logger.record_tabular("explained_variance", float(ev))
-            logger.record_tabular("average score", float(avg_score))
             logger.record_tabular("time elapsed", float(tnow - tfirststart))
             logger.dump_tabular()
 
-            savepath = load_path + ckpt_name
+            savepath = load_path + str(update) + "/" + ckpt_name
             model.save(savepath)
             print('Saving to', savepath)
 
     env.close()
 
 
-def play(policy, env, name):
+def play(policy, env):
     # Get state_space and action_space
     ob_space = env.observation_space
     ac_space = env.action_space
@@ -380,9 +365,8 @@ def play(policy, env, name):
                   max_grad_norm=0)
 
     # Load the model
-    load_path = "./Saved/{}/".format(name)
-    ckpt_name = "model.ckpt"
-    model.load(load_path, ckpt_name)
+    load_path = "./models/260/model.ckpt"
+    model.load(load_path)
 
     obs = env.reset()
 
@@ -405,4 +389,3 @@ def play(policy, env, name):
 
     print("Score ", score)
     env.close()
-    return score

@@ -44,26 +44,126 @@ print("\n", args, "\n")
 args.name = args.inference_type
 # Data reader
 reader = PPMI.ReadPD("/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/encoded.csv",
-                     targets=["UPDRS_I", "UPDRS_II", "UPDRS_III", "MSEADLG"],
+                     targets=["UPDRS_III"],
                      train_test_split=0.7, valid_eval_split=0.33, temporal=False, inference_type=args.inference_type,
-                     groups={"Demographics": ["GENDER.x", "AGE", "TIME_SINCE_DIAGNOSIS"],
-                             "Vital_Signs": ["SYSSUP", "DIASUP", "HRSUP", "SYSSTND", "DIASTND", "HRSTND"],
+                     groups={"Demographics": ["GENDER.x", "AGE", "TIME_SINCE_DIAGNOSIS", "RAHAWOPI", "RABLACK",
+                                              "RAASIAN", "RAINDALS", "RAWHITE", "HISPLAT", "EDUCYRS"],
+                             "General_Physical_Exam_And_Other_Exams": ["Skin", "Head/Neck/Lymphatic", "Eyes",
+                                                                       "Ears/Nose/Throat", "Lungs",
+                                                                       "Cardiovascular (including peripheral vascular)",
+                                                                       "Abdomen", "Musculoskeletal", "Neurological",
+                                                                       "Psychiatric", "CN346RSP", "CN5RSP", "CN2RSP",
+                                                                       "CN12RSP", "CN11RSP", "CN910RSP", "CN8RSP",
+                                                                       "CN7RSP", "MSLLRSP", "MSLARSP", "MSRLRSP",
+                                                                       "MSRARSP", "COHSLRSP", "COHSRRSP", "COFNRRSP",
+                                                                       "COFNLRSP", "SENRLRSP", "SENLARSP", "SENRARSP",
+                                                                       "SENLLRSP", "RFLLLRSP", "RFLRLRSP", "RFLLARSP",
+                                                                       "RFLRARSP", "PLRRRSP", "PLRLRSP"],
+                             "PD_Profile_History": ["TIME_SINCE_DIAGNOSIS", "TIME_SINCE_FIRST_SYMPTOM", "HAFSIBPD",
+                                                    "FULSIBPD", "BIODADPD", "BIOMOMPD", "PAGPARPD", "MATAUPD",
+                                                    "MAGPARPD", "PATAUPD",
+                                                    # "UPSITBK4", "UPSITBK3", "UPSITBK2", "UPSITBK1",  # These need to be
+                                                    # added together
+                                                    # "CNSOTH", "BRNINFM", "EPILEPSY", "DEPRS", "NARCLPSY", "RLS",
+                                                    # "HETRA", "STROKE", "SLPDSTRB", "DRMREMEM", "MVAWAKEN", "DRMOBJFL",
+                                                    # "DRMUMV", "DRMFIGHT", "PARKISM", "DRMVERBL", "SLPINJUR", "SLPLMBMV",
+                                                    # "DRMNOCTB", "DRMAGRAC", "DRMVIVID",
+                                                    # Total score generated feature
+                                                    # Categorical generated feature
+                                                    # "SCORE",
+                                                    "PDSURG", "DFRSKFCT", "DFPRESNT", "DFRPROG", "DFSTATIC",
+                                                    "DFMYOCLO", "DFBRADYA", "DFAKINES", "DFBRPLUS", "DFHEMPRK",
+                                                    "DFDYSTON", "DFCOGNIT", "DFPSYCH", "DFOTHPG", "DFFALLS", "DFFREEZ",
+                                                    "DFGAIT", "DFBRADYP", "DFAGESX", "DFURDYS", "DFRTREMP", "DFTONE",
+                                                    "DFUNIRIG", "DFAXRIG", "DFRIGIDA", "DFRIGIDP", "DFOTHTRM",
+                                                    "DFPATREM", "DFRTREMA", "DFBULBAR", "DFOTHCRS", "DFRAPSPE",
+                                                    "DFEYELID", "DFOCULO", "DFBWLDYS", "DFPGDIST", "DFPSHYPO",
+                                                    "DFHEMTRO", "DFOTHHYP", "DFOTHRIG", "DFCHOREA", "DFNEURAB",
+                                                    "DFOTHABR", "DFSTROKE", "DFSEXDYS", "DXTREMOR", "DOMSIDE",
+                                                    "DXBRADY", "DXOTHSX", "DXRIGID", "DXPOSINS"
+                                                    ],
+                             "Vital_Signs": ["SYSSUP", "DIASUP", "HRSUP", "SYSSTND", "DIASTND", "HRSTND", "WGTKG",
+                                             # Presence of Orthostatic Blood Pressure generated feature
+                                             ],
+                             "CSF_Biospecimens": ["CSFAlphasynuclein", "ABeta142", "Abeta42", "pTau", "pTau181P", "tTau",
+                                                  "Totaltau",
+                                                  # Ratios  "tTau / ABeta142", "tTau / CSFAlphasynuclein",
+                                                  # "ABeta142 / CSFAlphasynuclein", "pTau / ABeta142",
+                                                  # "pTau / CSFAlphasynuclein", "pTau / tTau"
+                                                  ],
+                             "Blood_Chemistry_And_Hematology_Labs": ["Monocytes", "Monocytes (%)", "Eosinophils",
+                                                                     "Eosinophils (%)", "Basophils", "Platelets",
+                                                                     "Neutrophils (%)", "Neutrophils",
+                                                                     "Lymphocytes (%)", "Lymphocytes", "Basophils (%)",
+                                                                     "Hematocrit", "RBC Morphology", "RBC",
+                                                                     "Hemoglobin", "WBC", "Total Bilirubin",
+                                                                     "Serum Glucose", "Total Protein", "Albumin-QT",
+                                                                     "Alkaline Phosphatase-QT", "Serum Sodium",
+                                                                     "Serum Potassium", "Serum Bicarbonate",
+                                                                     "Serum Chloride", "Calcium (EDTA)",
+                                                                     "Creatinine (Rate Blanked)", "ALT (SGPT)",
+                                                                     "AST (SGOT)", "Urea Nitrogen", "Serum Uric Acid",
+                                                                     "SerumIGF1"],
+                             "Imaging": ["CAUDATE_R", "CAUDATE_L", "PUTAMEN_R", "PUTAMEN_L"
+                                         # Right striatum and left striatum generated features
+                                         ],
                              "Mood": ["GDSALIVE", "GDSWRTLS", "GDSENRGY", "GDSHOPLS", "GDSBETER", "GDSMEMRY", "GDSHOME",
                                       "GDSHAPPY", "GDSHLPLS", "GDSSATIS", "GDSDROPD", "GDSEMPTY", "GDSBORED",
-                                      "GDSGSPIR", "GDSAFRAD", "STAIAD1", "STAIAD2", "STAIAD3", "STAIAD4", "STAIAD5",
+                                      "GDSGSPIR", "GDSAFRAD",
+                                      # Total score and depression generated features
+                                      "STAIAD1", "STAIAD2", "STAIAD3", "STAIAD4", "STAIAD5",
                                       "STAIAD6", "STAIAD7", "STAIAD8", "STAIAD9", "STAIAD10", "STAIAD11", "STAIAD12",
                                       "STAIAD13", "STAIAD14", "STAIAD15", "STAIAD16", "STAIAD17", "STAIAD18",
                                       "STAIAD19", "STAIAD20", "STAIAD21", "STAIAD22", "STAIAD23", "STAIAD24",
                                       "STAIAD25", "STAIAD26", "STAIAD27", "STAIAD28", "STAIAD29", "STAIAD30",
                                       "STAIAD31", "STAIAD32", "STAIAD33", "STAIAD34", "STAIAD35", "STAIAD36",
-                                      "STAIAD37", "STAIAD38", "STAIAD39", "STAIAD40"],
-                             "Motor": ["UPDRS_III", "NP3RIGN", "NP3RIGRU", "NP3RIGLU", "PN3RIGRL", "NP3RIGLL",
-                                       "NP3PTRMR", "NP3PTRML", "NP3KTRMR", "NP3KTRML", "NP3RTARU", "NP3RTALU",
-                                       "NP3RTARL", "NP3RTALL", "NP3RTALJ", "NP3RTCON"],
-                             "DaTScan": ["CAUDATE_R", "CAUDATE_L", "PUTAMEN_R", "PUTAMEN_L"],
-                             "Biospecimens": ["CSFAlphasynuclein", "ABeta142"],
-                             "Function": ["UPDRS_I", "MSEADLG"],
-                             "Cognition": ["MCATOT", "VLTANIM", "VLTVEG", "VLTFRUIT"]})
+                                      "STAIAD37", "STAIAD38", "STAIAD39", "STAIAD40"
+                                      # Total score generated feature
+                                      ],
+                             "Cognition": ["MCACLCKN", "MCALION", "MCACLCKH", "MCAALTTM", "MCACUBE", "MCACLCKC",
+                                           "MCAVIGIL", "MCARHINO", "MCAREC4", "MCAREC5", "MCADATE", "MCAMONTH", "MCAYR",
+                                           "MCADAY", "MCAPLACE", "MCACITY", "MCACAMEL", "MCAREC3", "MCABDS", "MCAFDS",
+                                           "MCAREC2", "MCAREC1", "MCAABSTR", "MCAVF", "MCAVFNUM", "MCASNTNC", "MCASER7",
+                                           "MCATOT", "VLTANIM", "VLTVEG", "VLTFRUIT",
+                                           # Total generated feature
+                                           "HVLTRT1", "HVLTRT2", "HVLTRT3", "HVLTRDLY", "HVLTREC", "HVLTFPRL",
+                                           "HVLTFPUN", "DVT_TOTAL_RECALL", "DVT_DELAYED_RECALL", "DVT_RETENTION",
+                                           "DVT_RECOG_DISC_INDEX",
+                                           "LNS1A", "LNS1B", "LNS1C", "LNS2A", "LNS2B", "LNS2C", "LNS3A", "LNS3B",
+                                           "LNS3C", "LNS4A", "LNS4B", "LNS4C", "LNS5A", "LNS5B", "LNS5C", "LNS_TOTRAW",
+                                           "JLO_TOTRAW", "COGSTATE", "COGDECLN"
+                                           ],
+                             "Function": ["UPDRS_I", "NP1COG", "NP1HALL", "NP1DPRS", "NP1ANXS", "NP1APAT", "NP1DDS",
+                                          "NP1SLPN", "NP1SLPD", "NP1PAIN", "NP1URIN", "NP1CNST", "NP1LTHD", "NP1FATG",
+                                          "UPDRS_II", "NP2HYGN", "NP2WALK", "NP2TURN", "NP2HOBB", "NP2HWRT", "NP2DRES",
+                                          "NP2EAT", "NP2SWAL", "NP2SALV", "NP2TRMR", "NP2SPCH", "NP2RISE", "NP2FREZ",
+                                          "MSEADLG"],
+                             "Motor": ["UPDRS_III", "NP3RTARU", "NP3KTRML", "NP3KTRMR", "NP3PTRML", "NP3PTRMR",
+                                       "NP3BRADY", "NP3POSTR", "NP3PSTBL", "NP3FRZGT", "NP3GAIT", "NP3RISNG",
+                                       "NP3LGAGL", "NP3LGAGR", "NP3TTAPL", "NP3TTAPR", "NP3PRSPL", "NP3PRSPR",
+                                       "NP3HMOVL", "NP3HMOVR", "NP3RTALU", "NP3RTARL", "NP3RTALJ", "NP3RTCON",
+                                       "NP3RTALL", "NP3FTAPL", "NP3FTAPR",
+                                       # "NP3RIGRL",
+                                       "NP3RIGLL", "NP3RIGLU",
+                                       "NP3RIGRU", "NP3RIGN", "NP3FACXP", "NP3SPCH",
+                                       # Total sums generated features
+                                       "NHY"
+                                       ],
+                             "Other": ["ESS1", "ESS2", "ESS3", "ESS4", "ESS5", "ESS6", "ESS7", "ESS8",
+                                       "SCAU1", "SCAU2", "SCAU3", "SCAU4", "SCAU5", "SCAU6", "SCAU7", "SCAU8", "SCAU9",
+                                       "SCAU10", "SCAU11", "SCAU12", "SCAU13", "SCAU14", "SCAU15", "SCAU16", "SCAU17",
+                                       "SCAU18", "SCAU19", "SCAU20", "SCAU21", "SCAU26B", "SCAU26C", "SCAU26D",
+                                       "CNTRLDSM", "TMDISMED", "TMTRWD", "TMTMTACT", "TMTORACT", "CNTRLEAT", "TMEAT",
+                                       "CNTRLBUY", "TMBUY", "CNTRLSEX", "TMSEX", "CNTRLGMB", "TMGAMBLE"],
+                             "PD_Risk_Identifiers": ["UPSITBK4", "UPSITBK3", "UPSITBK2", "UPSITBK1",
+                                                     # SUM not individual
+                                                     "DRMVIVID", "DRMAGRAC", "DRMNOCTB", "SLPLMBMV", "SLPINJUR",
+                                                     "DRMVERBL", "DRMFIGHT", "DRMUMV", "DRMOBJFL", "MVAWAKEN",
+                                                     "DRMREMEM", "SLPDSTRB", "STROKE", "HETRA", "PARKISM", "RLS",
+                                                     "NARCLPSY", "DEPRS", "EPILEPSY", "BRNINFM", "CNSOTH",
+                                                     # SUM not individual
+                                                     "SCORE"
+                                                     ]})
 
 # Inputs
 groups = {}
@@ -118,7 +218,8 @@ learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
 
 # Optimizer
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-train = optimizer.minimize(loss, global_step=global_step)  # TODO decreasing learning rate / maybe clip by a max grad norm
+train = optimizer.minimize(loss,
+                           global_step=global_step)  # TODO decreasing learning rate / maybe clip by a max grad norm
 
 # TensorBoard logging
 train_summary = tf.summary.merge([tf.summary.scalar("Training_Loss", loss),
@@ -126,7 +227,7 @@ train_summary = tf.summary.merge([tf.summary.scalar("Training_Loss", loss),
                                   ])
 valid_summary = tf.summary.merge([tf.summary.scalar("Validation_Loss", loss),
                                   ])
-                                  # tf.summary.scalar("Validation_Accuracy", accuracy)])
+# tf.summary.scalar("Validation_Accuracy", accuracy)])
 total_episodes = tf.get_variable("episode", [], tf.int32, tf.zeros_initializer(), trainable=False)
 increment_episode = tf.assign_add(total_episodes, 1)
 
@@ -146,7 +247,8 @@ with tf.Session() as sess:
     path = os.getcwd()
     saving_logging_directory = path + "/" + args.saving_logging_directory + "/"
     logs = tf.summary.merge_all()
-    writer = tf.summary.FileWriter(saving_logging_directory + "Logs/" + args.name + "/" + args.name_suffix + "/", sess.graph)
+    writer = tf.summary.FileWriter(saving_logging_directory + "Logs/" + args.name + "/" + args.name_suffix + "/",
+                                   sess.graph)
 
     # Restore any previously saved  TODO: Resume option - separate save directory for last ckpt!
     if args.saving:
@@ -230,7 +332,8 @@ with tf.Session() as sess:
                 for k, grp2 in enumerate(groups):
                     patient_saliences.append({"PATNO": d["id"], "Group": grp, "Relation": grp2,
                                               "Salience": saliences[i][j][k]})
-        pd.DataFrame(patient_saliences).to_csv("/Users/sam/Documents/Programming/Research/PD_Analysis/data/Stats/saliences_{}.csv".format(args.inference_type), index=False)
-
+        pd.DataFrame(patient_saliences).to_csv(
+            "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Stats/saliences_{}.csv".format(
+                args.inference_type), index=False)
 
 # TODO if slurm, option to delete saved files so as not to take up memory (nah, increase memory tho)
