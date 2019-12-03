@@ -3,9 +3,10 @@ import sonnet as snt
 import numpy as np
 import pandas as pd
 from PD_Analysis.relational_module import MHDPA
-from PD_Analysis.data import PPMI
+from PD_Analysis.data import read_old
 import os
 import argparse
+import matplotlib.pyplot as plt
 
 
 def str2bool(v):
@@ -22,19 +23,19 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-saving_logging_directory', type=str, default='saving_logging')
 parser.add_argument('-inference_type', type=str, default='rop')
 parser.add_argument('-name', type=str, default='name')
-parser.add_argument('-name_suffix', type=str, default='name_suffix')
+parser.add_argument('-name_suffix', type=str, default='6')
 parser.add_argument('-relational', type=str2bool, default=True)
-parser.add_argument('-entity_mlp_size_1', type=int, default=8)
-parser.add_argument('-entity_mlp_size_2', type=int, default=8)
-parser.add_argument('-mhdpa_key_size', type=int, default=8)
-parser.add_argument('-mhdpa_value_size', type=int, default=8)
+parser.add_argument('-entity_mlp_size_1', type=int, default=32)
+parser.add_argument('-entity_mlp_size_2', type=int, default=32)
+parser.add_argument('-mhdpa_key_size', type=int, default=32)
+parser.add_argument('-mhdpa_value_size', type=int, default=32)
 parser.add_argument('-distributional', type=str2bool, default=False)
 parser.add_argument('-top_k', type=int, default=3)
 parser.add_argument('-sample', type=str2bool, default=True)
 parser.add_argument('-uniform_sample', type=str2bool, default=False)
 parser.add_argument('-aggregate_method', type=str, default="max")
-parser.add_argument('-epochs', type=int, default=10000)
-parser.add_argument('-episodes', type=int, default=100)
+parser.add_argument('-epochs', type=int, default=1000)
+parser.add_argument('-episodes', type=int, default=1)
 parser.add_argument('-batch_dim', type=int, default=20)
 parser.add_argument('-logging', type=str2bool, default=False)
 parser.add_argument('-saving', type=str2bool, default=True)
@@ -42,11 +43,12 @@ parser.add_argument('-slurm', type=str2bool, default=False)
 args = parser.parse_args()
 print("\n", args, "\n")
 args.name = args.inference_type
+args.saving_logging_directory = args.saving_logging_directory + "_" + args.name_suffix
 # Data reader
-reader = PPMI.ReadPD("/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/encoded.csv",
-                     targets=["UPDRS_III"],
-                     train_test_split=0.7, valid_eval_split=0.33, temporal=False, inference_type=args.inference_type,
-                     groups={"Demographics": ["GENDER.x", "AGE", "TIME_SINCE_DIAGNOSIS", "RAHAWOPI", "RABLACK",
+reader = read_old.ReadPD("/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/encoded.csv",
+                        targets=["UPDRS_III"],
+                        train_test_split=0.7, valid_eval_split=0.33, temporal=False, inference_type=args.inference_type,
+                        groups={"Demographics": ["GENDER.x", "AGE", "TIME_SINCE_DIAGNOSIS", "RAHAWOPI", "RABLACK",
                                               "RAASIAN", "RAINDALS", "RAWHITE", "HISPLAT", "EDUCYRS"],
                              "General_Physical_Exam_And_Other_Exams": ["Skin", "Head/Neck/Lymphatic", "Eyes",
                                                                        "Ears/Nose/Throat", "Lungs",
@@ -170,7 +172,7 @@ groups = {}
 for g in reader.groups:
     groups[g] = tf.placeholder(tf.float32, [None, len(reader.groups[g])], "Group_{}".format(g))
 outcome = tf.placeholder(tf.float32, [None, len(reader.targets)], "Outcome")
-# TODO: concatenate time ahead for future score inference
+# TODO: concatenate time ahead for future score inference!! DO THIS
 
 if args.relational:
     # Represent entities
@@ -197,10 +199,10 @@ if args.relational:
     relations = mhdpa.aggregate_relations(args.aggregate_method)  # Concat for distributional
 else:
     relations = tf.concat([groups[g] for g in groups], axis=1)
-    preds = snt.nets.mlp.MLP([8, 8, 8, 8])(relations)
+    preds = snt.nets.mlp.MLP([128, 128, 64, 32])(relations)
 
 # Training loss
-preds = snt.nets.mlp.MLP([8, 8, outcome.shape[1]])(relations)
+preds = snt.nets.mlp.MLP([32, 32, outcome.shape[1]])(relations)
 loss = tf.losses.mean_squared_error(outcome, preds)
 # logits = snt.nets.mlp.MLP([256, 256, 256, 256, outcome.shape[1]])(relations)
 # loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=outcome, logits=logits)
@@ -275,7 +277,6 @@ with tf.Session() as sess:
             # Train
             _, episode_loss, summary, total_episode = sess.run([train, loss, train_summary, increment_episode], inputs)
 
-            episode_loss += episode_loss
             episode += 1
             if args.logging:
                 writer.add_summary(summary, total_episode)
@@ -298,7 +299,7 @@ with tf.Session() as sess:
         # Save best model
         if args.saving:
             if max_acc > max_validation_accuracy:
-                print("New max accuracy: {}".format(max_acc))
+                print("New max accuracy: {}, Validation loss: {}".format(max_acc, validation_loss))
                 max_validation_accuracy = max_acc
                 if max_validation_accuracy > 0:
                     saver.save(sess, saving_logging_directory + "Saved/" + args.name + "/" + args.name_suffix)
@@ -318,6 +319,16 @@ with tf.Session() as sess:
     inputs.update({outcome: np.stack([d["desired_outputs"] for d in data])})
     accuracies += "{} ".format(loss.eval(inputs))
     print(accuracies)
+    predicted_observed = {"Predicted": preds.eval(inputs).flatten(), "Observed": outcome.eval(inputs).flatten()}
+    # print(predicted_observed["Predicted"])
+    pd.DataFrame(predicted_observed).to_csv(
+        "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Stats/Predicted_Observed/predicted_observed_{}_{}.csv".format(
+            args.inference_type, args.name_suffix), index=False)
+    plt.plot(predicted_observed["Predicted"], predicted_observed["Observed"], 'ro')
+    plt.xlabel('Predicted')
+    plt.ylabel('Observed')
+    plt.savefig("/Users/sam/Documents/Programming/Research/PD_Analysis/data/Stats/Plots/Plot_{}_{}.png".format(
+        args.inference_type, args.name_suffix))
 
     # Saliences
     if args.relational:
@@ -333,7 +344,7 @@ with tf.Session() as sess:
                     patient_saliences.append({"PATNO": d["id"], "Group": grp, "Relation": grp2,
                                               "Salience": saliences[i][j][k]})
         pd.DataFrame(patient_saliences).to_csv(
-            "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Stats/saliences_{}.csv".format(
-                args.inference_type), index=False)
+            "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Stats/Saliences/saliences_{}_{}.csv".format(
+                args.inference_type, args.name_suffix), index=False)
 
 # TODO if slurm, option to delete saved files so as not to take up memory (nah, increase memory tho)
