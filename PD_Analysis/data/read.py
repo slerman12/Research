@@ -9,6 +9,7 @@ class ReadPD:
                  inference_type="future_scores_one_to_one", to_drop=None, features=None):
         # Processed data file
         data = pd.read_csv(filename)
+        self.data = data
 
         # Set variables
         self.targets = targets
@@ -62,6 +63,7 @@ class ReadPD:
         if cross_val_folds is None:
             # Split data
             training_data, validation_data, evaluation_data = split(train_test_split, valid_eval_split)
+            self.training = training_data
 
             # Create data
             self.training_data_list = self.start(training_data)
@@ -137,7 +139,7 @@ class ReadPD:
         # Return data list
         return data_list
 
-    def iterate_batch(self, batch_size):
+    def iterate_batch(self, batch_size):  # TODO perhaps balance classes for classification
         # Reset and shuffle batch when all items have been iterated
         if self.batch_begin > self.training_data_size - batch_size:
             # Reset batch index
@@ -172,3 +174,17 @@ class ReadPD:
         # Reset batch iteration
         self.batch_begin = 0
         self.epoch_complete = False
+
+    def class_balancing(self):
+        # Oversampling
+        max_size = self.training[self.targets[0]].value_counts().max()
+
+        lst = [self.training]
+        for class_index, group in self.training.groupby(self.targets[0]):
+            lst.append(group.sample(max_size-len(group), replace=True))
+        self.balanced_training = pd.concat(lst)
+
+        self.training_data_list = self.start(self.balanced_training)
+
+        # Training data size
+        self.training_data_size = len(self.training_data_list)

@@ -1,10 +1,11 @@
-import tensorflow as tf
-import sonnet as snt
 import pandas as pd
-from PD_Analysis.data import read
 import os
 import argparse
 import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import numpy as np
+import itertools
+import time
 
 
 def str2bool(v):
@@ -21,12 +22,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-saving_logging_directory', type=str, default='saving_logging')
 parser.add_argument('-inference_type', type=str, default='future_scores_one_to_one')
 parser.add_argument('-name', type=str, default='name')
-parser.add_argument('-name_suffix', type=str, default='1')
-parser.add_argument('-data_file', type=str, default='data/Processed/future_scores_one_to_one_timespan_[0, 0.25]_UPDRS_III.csv')
+parser.add_argument('-name_suffix', type=str, default='h_stat_moca_2_yrs')
+parser.add_argument('-data_file', type=str, default='data/Processed/future_scores_one_to_one_timespan_0_2_MCATOT.csv')
 parser.add_argument('-classification_or_regression', type=str, default='regression')
-parser.add_argument('-epochs', type=int, default=5000)
+parser.add_argument('-epochs', type=int, default=80)
 parser.add_argument('-episodes', type=int, default=1)
-parser.add_argument('-learning_rate', type=int, default=0.0001)
+parser.add_argument('-learning_rate', type=float, default=0.0001)
 parser.add_argument('-batch_dim', type=int, default=32)
 parser.add_argument('-logging', type=str2bool, default=False)
 parser.add_argument('-saving', type=str2bool, default=True)
@@ -35,18 +36,40 @@ parser.add_argument('-slurm', type=str2bool, default=False)
 args = parser.parse_args()
 print("\n", args, "\n")
 
+if args.slurm:
+    import tensorflow.compat.v1 as tf
 
-def mlp_regressor(inputs, outcome):
-    mlp_layer_sizes = [128, 128, 64, 32, outcome.shape[1]]
+    tf.disable_v2_behavior()
+    from data import read
+else:
+    import tensorflow as tf
+    from PD_Analysis.data import read
+
+
+def mlp_regressor(inputs, outcome, dropout_proba=1):
+    mlp_layer_sizes = [256, 128, 64, 32, outcome.shape[1]]
 
     print("MLP layer sizes: ", mlp_layer_sizes)
 
     # initializer = snt.initializers.TruncatedNormal()
 
-    # .1 dropout on first hidden layer
-    hidden_layer_with_dropout = tf.nn.dropout(tf.nn.relu(snt.Linear(mlp_layer_sizes[0])(inputs)), keep_prob=0.9)
-
-    preds = snt.nets.mlp.MLP(mlp_layer_sizes[1:])(hidden_layer_with_dropout)
+    # .1 dropout on first hidden layer TODO NO DROPOUT AT TEST TIME
+    hidden_layer_with_dropout = tf.nn.dropout(tf.nn.relu(tf.keras.layers.Dense(mlp_layer_sizes[0],
+                                                                               kernel_initializer='truncated_normal',
+                                                                               bias_initializer='zeros')(inputs)),
+                                              keep_prob=dropout_proba)
+    h1 = tf.nn.relu(tf.keras.layers.Dense(mlp_layer_sizes[1],
+                                          kernel_initializer='truncated_normal',
+                                          bias_initializer='zeros')(hidden_layer_with_dropout))
+    h2 = tf.nn.relu(tf.keras.layers.Dense(mlp_layer_sizes[2],
+                                          kernel_initializer='truncated_normal',
+                                          bias_initializer='zeros')(h1))
+    h3 = tf.nn.relu(tf.keras.layers.Dense(mlp_layer_sizes[3],
+                                          kernel_initializer='truncated_normal',
+                                          bias_initializer='zeros')(h2))
+    preds = tf.keras.layers.Dense(mlp_layer_sizes[4],
+                                  kernel_initializer='truncated_normal',
+                                  bias_initializer='zeros')(h3)
 
     # Training loss
     loss = tf.losses.mean_squared_error(outcome, preds)
@@ -56,26 +79,40 @@ def mlp_regressor(inputs, outcome):
     return preds, loss, accuracy
 
 
-def mlp_binary_classifier(inputs, outcome):
-    mlp_layer_sizes = [256, 128, 64, 32, 1]
+def mlp_classifier(inputs, outcome, num_class=3, dropout_proba=1):
+    mlp_layer_sizes = [256, 128, 64, 32, num_class]
+
+    outcome = tf.cast(tf.squeeze(outcome), tf.int64)
 
     print("MLP layer sizes: ", mlp_layer_sizes)
 
     # initializer = snt.initializers.TruncatedNormal()
 
     # .1 dropout on first hidden layer
-    hidden_layer_with_dropout = tf.nn.dropout(tf.nn.relu(snt.Linear(mlp_layer_sizes[0])(inputs)), keep_prob=0.95)
-
-    logits = snt.nets.mlp.MLP(mlp_layer_sizes[1:])(hidden_layer_with_dropout)
+    hidden_layer_with_dropout = tf.nn.dropout(tf.nn.relu(tf.keras.layers.Dense(mlp_layer_sizes[0],
+                                                                               kernel_initializer='truncated_normal',
+                                                                               bias_initializer='zeros')(inputs)),
+                                              keep_prob=dropout_proba)
+    h1 = tf.nn.relu(tf.keras.layers.Dense(mlp_layer_sizes[1],
+                                          kernel_initializer='truncated_normal',
+                                          bias_initializer='zeros')(hidden_layer_with_dropout))
+    h2 = tf.nn.relu(tf.keras.layers.Dense(mlp_layer_sizes[2],
+                                          kernel_initializer='truncated_normal',
+                                          bias_initializer='zeros')(h1))
+    h3 = tf.nn.relu(tf.keras.layers.Dense(mlp_layer_sizes[3],
+                                          kernel_initializer='truncated_normal',
+                                          bias_initializer='zeros')(h2))
+    logits = tf.keras.layers.Dense(mlp_layer_sizes[4],
+                                   kernel_initializer='truncated_normal',
+                                   bias_initializer='zeros')(h3)
 
     # Training loss
-    cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=outcome, logits=logits)
+    cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=outcome, logits=logits)
     loss = tf.reduce_mean(cross_entropy)
 
     # Accuracy
-    preds = tf.round(tf.nn.sigmoid(logits))
-    correct_pred = tf.equal(preds, outcome)
-    accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+    preds = tf.argmax(tf.nn.softmax(logits), 1)
+    accuracy = tf.reduce_mean(tf.cast(tf.equal(preds, outcome), tf.float32))
 
     return preds, loss, accuracy
 
@@ -95,7 +132,20 @@ def run(**params):
 
     print("Number of features: ", len(reader.features), "\nTarget(s): ", reader.targets)
 
-    preds, loss, accuracy = params["model"](inputs, outcome)
+    dropout_prob = tf.placeholder_with_default(1.0, shape=())
+
+    if args.classification_or_regression == "regression":
+        preds, loss, accuracy = params["model"](inputs, outcome, dropout_prob)
+    else:
+        print(reader.data.groupby(reader.targets).count())
+        num_observations_per_class = reader.training[reader.targets[0]].value_counts().values
+        print(num_observations_per_class)
+        reader.class_balancing()
+        num_observations_per_class = reader.balanced_training[reader.targets[0]].value_counts().values
+        print(num_observations_per_class)
+        preds, loss, accuracy = params["model"](inputs, outcome, len(
+            reader.data.groupby(reader.targets).count()), dropout_prob)  # only works for one target?
+    # accuracy = 1 / (loss + 0.001)  # since validation selects best model this way
 
     # logits = snt.nets.mlp.MLP([256, 256, 256, 256, outcome.shape[1]])(relations)
     # loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=outcome, logits=logits)
@@ -136,10 +186,12 @@ def run(**params):
     increment_episode = tf.assign_add(total_episodes, 1)
 
     # Init/save/restore variables
-    max_accuracy = tf.get_variable("max_accuracy", [], tf.float32, tf.zeros_initializer(), trainable=False)
-    update_max_accuracy = tf.cond(max_accuracy < accuracy, lambda: tf.assign(max_accuracy, accuracy),
-                                  lambda: tf.assign(max_accuracy, max_accuracy))
-    max_validation_accuracy = 0
+    max_inverse_loss = tf.get_variable("max_inverse_loss", shape=[], dtype=tf.float32, initializer=tf.zeros_initializer(),
+                                       trainable=False)
+    update_max_inverse_loss = tf.cond(max_inverse_loss < 1 / (loss + 0.0001), lambda: tf.assign(max_inverse_loss,
+                                                                                                1 / (loss + 0.0001)),
+                                      lambda: tf.assign(max_inverse_loss, max_inverse_loss))
+    max_validation_inverse_loss = None
     init = tf.global_variables_initializer()
     saver = tf.train.Saver()
 
@@ -149,24 +201,29 @@ def run(**params):
 
         # TensorBoard
         path = os.getcwd()
-        saving_logging_directory = path + "/" + args.saving_logging_directory + "_" + str(params["name_suffix"]) + "/"
+        saving_logging_directory = path + "/" + args.saving_logging_directory + "_" + params["name"] + "_" + str(
+            params["name_suffix"]) + "/"
         logs = tf.summary.merge_all()
-        writer = tf.summary.FileWriter(saving_logging_directory + "Logs/" + params["inference_type"] + "/" + str(params["name_suffix"]) + "/",
-                                       sess.graph)
+        writer = tf.summary.FileWriter(
+            saving_logging_directory + "Logs/" + params["name"] + "_" + str(params["name_suffix"]) + "/",
+            sess.graph)
 
         # Restore any previously saved  TODO: Resume option - separate save directory for last ckpt!
         if args.saving:
             if not os.path.exists(saving_logging_directory + "Saved/" + params["inference_type"] + "/"):
                 os.makedirs(saving_logging_directory + "Saved/" + params["inference_type"] + "/")
-            if tf.train.checkpoint_exists(saving_logging_directory + "Saved/" + params["inference_type"] + "/" + str(params["name_suffix"])):
+            if tf.train.checkpoint_exists(
+                    saving_logging_directory + "Saved/" + params["name"] + "_" + str(params["name_suffix"])):
                 # NOTE: for some reason continuing training does not work after restoring
                 if not args.slurm and args.restore:
-                    saver.restore(sess, saving_logging_directory + "Saved/" + params["inference_type"] + "/" + str(params["name_suffix"]))
+                    saver.restore(sess, saving_logging_directory + "Saved/" + params["name"] + "_" + str(
+                        params["name_suffix"]))
 
         # Epochs
+        start_time = time.time()
         epoch = 1
         episode = 1
-        while epoch <= params["epochs"]:
+        while epoch <= params["epochs"] and time.time() - start_time < 10 * 60:
             episode_loss = 0
             training_accuracy = 0
 
@@ -174,10 +231,11 @@ def run(**params):
             for _ in range(args.episodes):
                 # Batch
                 batch = reader.iterate_batch(args.batch_dim)
-                data = {inputs: batch[0], outcome: batch[1]}
+                data = {inputs: batch[0], outcome: batch[1], dropout_prob: 0.9}
 
                 # Train
-                _, episode_loss, training_accuracy, summary, total_episode = sess.run([train, loss, accuracy, train_summary, increment_episode], data)
+                _, episode_loss, training_accuracy, summary, total_episode = sess.run(
+                    [train, loss, accuracy, train_summary, increment_episode], data)
 
                 episode += 1
                 if args.logging:
@@ -185,111 +243,108 @@ def run(**params):
 
                 # Epoch complete
                 if reader.epoch_complete:
-                    print("Epoch {} of {} complete.".format(epoch, params["epochs"]))
+                    if not args.slurm:
+                        print("Epoch {} of {} complete.".format(epoch, params["epochs"]))
                     epoch += 1
                     episode = 1
                     break
 
             # Validation accuracy
             data = {inputs: reader.validation_data[0], outcome: reader.validation_data[1]}
-            validation_loss, summary, max_acc, validation_acc = sess.run([loss, valid_summary, update_max_accuracy, accuracy], data)
+            validation_loss, summary, max_inverse_loss_updated, validation_acc = sess.run(
+                [loss, valid_summary, update_max_inverse_loss, accuracy], data)
             if args.logging:
                 writer.add_summary(summary, total_episode)
 
             # Save best model
             if args.saving:
-                if max_acc > max_validation_accuracy:
-                    print("New max validation accuracy: {}, Validation loss: {}".format(max_acc, validation_loss))
-                    max_validation_accuracy = max_acc
-                    if max_validation_accuracy > 0:
-                        saver.save(sess, saving_logging_directory + "Saved/" + params["inference_type"] + "/" + str(params["name_suffix"]))
+                if max_validation_inverse_loss is None or max_inverse_loss_updated > max_validation_inverse_loss:
+                    print(
+                        "New min validation loss: {}, Validation accuracy: {}".format(validation_loss, validation_acc))
+                    max_validation_inverse_loss = max_inverse_loss_updated
+                    # if min_validation_loss is not None:
+                    saver.save(sess,
+                               saving_logging_directory + "Saved/" + params["name"] + "_" + str(params["name_suffix"]))
 
             # Print performance
             if not args.slurm:
-                print('Epoch', epoch, 'of', params["epochs"], 'episode', episode, 'training loss:', episode_loss, "training accuracy:", training_accuracy,
+                print('Epoch', epoch, 'of', params["epochs"], 'episode', episode, 'training loss:', episode_loss,
+                      "training accuracy:", training_accuracy,
                       'validation loss:', validation_loss, 'validation accuracy:', validation_acc)
 
         # TODO: decrease learning rate, max grad norm, sysargs, slurm
-
-
         # DELETE - just testing no validation for classification on account of class imbalances - possible solution would be to balance training and use running average validation for saving though still biasses towards long training periods that favor heavier validation class, or rather than saving based on best val, save until training acc running average gets better than validation acc running average and validation accuracy no longer improving (slope falls below 0) but this as major problems too -- no, just use a validation set consisting of balanced classes
-        if params["model"] == mlp_binary_classifier:
-            saver.save(sess, saving_logging_directory + "Saved/" + params["inference_type"] + "/" + str(params["name_suffix"]))
+        if params["model"] == mlp_classifier:
+            saver.save(sess, saving_logging_directory + "Saved/" + params["name"] + "_" + str(params["name_suffix"]))
 
         # Accuracy on test tasks TODO use individual outcome losses!
-        saver.restore(sess, saving_logging_directory + "Saved/" + params["inference_type"] + "/" + str(params["name_suffix"]))
-        test_loss = ""
+        saver.restore(sess, saving_logging_directory + "Saved/" + params["name"] + "_" + str(params["name_suffix"]))
         data = {inputs: reader.evaluation_data[0], outcome: reader.evaluation_data[1]}
-        test_loss += "{} ".format(loss.eval(data))
+        test_loss = loss.eval(data)
         test_accuracy = accuracy.eval(data)
-        print("Test Loss: ", test_loss, " Test accuracy: ", test_accuracy, " Max Validation Accuracy: ", max_validation_accuracy)
+        print("Test Loss: ", test_loss, " Test accuracy: ", test_accuracy)
         predicted_observed = {"Predicted": preds.eval(data).flatten(), "Observed": outcome.eval(data).flatten()}
         # print(predicted_observed["Predicted"])
         pd.DataFrame(predicted_observed).to_csv(
             "data/Stats/Predicted_Observed/predicted_observed_{}_{}.csv".format(
-                params["inference_type"], str(params["name_suffix"])), index=False)
+                params["name"], str(params["name_suffix"])), index=False)
         plt.plot(predicted_observed["Predicted"], predicted_observed["Observed"], 'ro')
         plt.xlabel('Predicted')
         plt.ylabel('Observed')
         plt.savefig("data/Stats/Plots/Plot_{}_{}.png".format(
-            params["inference_type"], str(params["name_suffix"])))
-        
+            params["name"], str(params["name_suffix"])))
+
+        if args.classification_or_regression != "regression":
+
+            # Confusion matrix
+            cm = confusion_matrix(predicted_observed["Observed"], predicted_observed["Predicted"])
+
+            normalize = True
+
+            accuracy = np.trace(cm) / float(np.sum(cm))
+            misclass = 1 - accuracy
+
+            cmap = plt.get_cmap('Blues')
+
+            plt.figure(figsize=(8, 6))
+            plt.imshow(cm, interpolation='nearest', cmap=cmap)
+            plt.title(args.data_file.replace("/", "_").replace("data_Processed_", "").replace(".csv", ""))
+            plt.colorbar()
+
+            # if target_names is not None:
+            #     tick_marks = np.arange(len(target_names))
+            #     plt.xticks(tick_marks, target_names, rotation=45)
+            #     plt.yticks(tick_marks, target_names)
+
+            if normalize:
+                cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+
+            thresh = cm.max() / 1.5 if normalize else cm.max() / 2
+            for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+                if normalize:
+                    plt.text(j, i, "{:0.4f}".format(cm[i, j]),
+                             horizontalalignment="center",
+                             color="white" if cm[i, j] > thresh else "black")
+                else:
+                    plt.text(j, i, "{:,}".format(cm[i, j]),
+                             horizontalalignment="center",
+                             color="white" if cm[i, j] > thresh else "black")
+
+            plt.tight_layout()
+            plt.ylabel('True label')
+            plt.xlabel('Predicted label\naccuracy={:0.4f}; misclass={:0.4f}'.format(accuracy, misclass))
+
+            plt.savefig("data/Stats/Plots/cm/cm_{}.png".format(args.data_file.replace("/", "_").replace("data_Processed_", "").replace(".csv", "")))
+
         return test_loss, test_accuracy
 
-# TODO if slurm, option to delete saved files so as not to take up memory (nah, increase memory tho)
 
+if __name__ == '__main__':
+    results = run(inference_type=args.inference_type, epochs=args.epochs, learning_rate=args.learning_rate, name=args.name,
+                  name_suffix=args.name_suffix,
+                  targets=["SCORE_FUTURE"] if args.inference_type == "future_scores_one_to_one" else ["RATE"],
+                  data_file=args.data_file,
+                  model=mlp_regressor if args.classification_or_regression == "regression" else mlp_classifier)
 
-# MSE1 = run(inference_type=args.inference_type, epochs=2, learning_rate=0.01, name_suffix=args.name_suffix, targets=["SCORE_FUTURE"],
-#     data_file="/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/future_scores_one_to_one.csv")
-#
-# MSE2 = run(inference_type=args.inference_type, epochs=2, learning_rate=0.01, name_suffix=2, targets=["SCORE_FUTURE"],
-#            data_file="/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/future_scores_bl_to_one.csv")
-#
-# print(MSE1, MSE2)
-
-grid_search = [["rates_one_to_one", 5000, .00001, 0, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_classification_UPDRS_III.csv", mlp_binary_classifier],
-               ["rates_one_to_one", 5000, .00001, 1, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_UPDRS_III.csv", mlp_regressor],
-               ["rates_one_to_one", 5000, .00001, 2, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_UPDRS_III.csv"],
-               ["rates_one_to_one", 5000, .00001, 3, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_UPDRS_III.csv"],
-               ["rates_one_to_one", 5000, .00001, 4, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one.csv"],
-               ["rates_one_to_one", 5000, .00001, 5, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one.csv"],
-               ["rates_one_to_one", 5000, .00001, 6, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one.csv"],
-               ["rates_one_to_one", 5000, .01, 7, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_UPDRS_III.csv"],
-               ["rates_one_to_one", 5000, .01, 8, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_UPDRS_III.csv"],
-               ["rates_one_to_one", 5000, .01, 9, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_UPDRS_III.csv"],
-               ["rates_one_to_one", 5000, .01, 10, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one.csv"],
-               ["rates_one_to_one", 5000, .01, 11, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one.csv"],
-               ["rates_one_to_one", 5000, .01, 12, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one.csv"],
-               ["rates_one_to_one", 5000, .00001, 13, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .00001, 14, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .00001, 15, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .00001, 16, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .00001, 17, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .00001, 18, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .01, 19, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .01, 20, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .01, 21, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_bl_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .01, 22, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .01, 23, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one_MSEADLG.csv"],
-               ["rates_one_to_one", 5000, .01, 24, ["RATE"], "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/rates_one_to_one_MSEADLG.csv"]]
-
-
-def future_scores(bl_or_one="bl", timespan_t_="", UPDRS_III_or_MSEADLG="UPDRS_III"):
-    return "future_scores_one_to_one", "SCORE_FUTURE",  "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/future_scores_{}_to_one_{}{}.csv".format(bl_or_one, timespan_t_, UPDRS_III_or_MSEADLG), "regression"
-
-
-def rates(bl_or_one="bl", classification_or_regression="regression", UPDRS_III_or_MSEADLG="UPDRS_III"):
-    return "rates_one_to_one", "RATE",  "/Users/sam/Documents/Programming/Research/PD_Analysis/data/Processed/future_scores_{}_to_one_{}_{}.csv".format(bl_or_one, classification_or_regression, UPDRS_III_or_MSEADLG), classification_or_regression
-
-# results = []
-# for pset in grid_search:
-#     results.append(run(inference_type=pset[0], epochs=pset[1], learning_rate=pset[2], name_suffix=pset[3],
-#                        targets=pset[4], data_file=pset[5], model=pset[6])[0])
-
-
-results = run(inference_type=args.inference_type, epochs=args.epochs, learning_rate=args.learning_rate, name_suffix=args.name_suffix,
-              targets=["SCORE_FUTURE"] if args.inference_type == "future_scores_one_to_one" else ["RATE"],
-              data_file=args.data_file, model=mlp_regressor if args.classification_or_regression == "regression" else mlp_binary_classifier)
-
-print("\n", args, "\n")
-print(results)
+    print("\n", args, "\n")
+    print("{} {}".format(results[0], results[1]))

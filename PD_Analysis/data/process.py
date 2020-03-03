@@ -256,7 +256,7 @@ def generate_future_scores_one_to_one(data, id_name, score_name, time_name, from
     progress.close()
 
     # Output to file
-    new_data.to_csv("Processed/future_scores_{}_to_one_{}{}.csv".format("bl" if from_baseline_only else "one", "" if to_timespan is None else "timespan_" + str(to_timespan) + "_", score_name), index=False)
+    new_data.to_csv("Processed/future_scores_{}_to_one_{}{}.csv".format("bl" if from_baseline_only else "one", "" if to_timespan is None else "timespan_" + str(to_timespan[0]) + "_" + str(to_timespan[1]) + "_", score_name), index=False)
 
     # Return new dataset
     return new_data
@@ -433,32 +433,40 @@ if __name__ == "__main__":
     # "AGE": [0,1,2,3,4,5,0,1,2,3,4], "UPDRS_III": [10,11,12,13,14,15,16,17,18,19,20]})
 
     encoded = pd.read_csv("Processed/encoded.csv")
+    # print(pd.read_csv("Preprocessed/preprocessed_data_treated_and_untreated_off_PD.csv")["COGSTATE"].value_counts())
+    print(encoded["MCATOT"].describe())
     # future_scores = generate_future_scores_one_to_one(encoded, "PATNO", "MSEADLG", "AGE")
     # future_scores = generate_rates_one_to_one(encoded, "PATNO", "UPDRS_III", "AGE", from_baseline_only=True, classification=True)
+
+    # for f_bl in [False]:
+    #     for to_tspan in [[0, 2]]:
+    #         for targ in ["MCATOT"]:
+    #             generate_future_scores_one_to_one(encoded, "PATNO", targ, "AGE", from_baseline_only=f_bl, to_timespan=to_tspan)
 
     c = 0
 
     for f_bl in [True, False]:
-        for to_tspan in [None, [0, .25], [0, 0.5], [0, 0.75]]:
-            for targ in ["UPDRS_III", "MSEADLG"]:
+        for to_tspan in [None, [0, 0.5], [0, 1], [0, 1.5], [0, 2], [1.5, 2]]:
+            for targ in ["UPDRS_III", "MSEADLG", "MCATOT", "COGSTATE"]:
                 generate_future_scores_one_to_one(encoded, "PATNO", targ, "AGE", from_baseline_only=f_bl, to_timespan=to_tspan)
                 c += 1
-
-    for f_bl in [True, False]:
-        for c_or_r in [True, False]:
-            for targ in ["UPDRS_III", "MSEADLG"]:
-                generate_rates_one_to_one(encoded, "PATNO", targ, "AGE", from_baseline_only=f_bl, classification=c_or_r)
-                c += 1
-
-                # Generalizability categorical (heuristic)
-                g = 0
-                if f_bl:
-                    g += 7
-                else:
-                    g += 10
-
-    print("Datasets: ", c)
+    #
+    # for f_bl in [True, False]:
+    #     for c_or_r in [True, False]:
+    #         for targ in ["UPDRS_III", "MSEADLG"]:
+    #             generate_rates_one_to_one(encoded, "PATNO", targ, "AGE", from_baseline_only=f_bl, classification=c_or_r)
+    #             c += 1
+    #
+    # print("Datasets: ", c)
 
     # generate_rates_one_to_one(encoded, "PATNO", "MSEADLG", "AGE", from_baseline_only=True, classification=True)
+
+    # for f_bl in [True, False]:
+    #     for c_or_r in [True, False]:
+    #         for targ in ["MCATOT"]:
+    #             generate_rates_one_to_one(encoded, "PATNO", targ, "AGE", from_baseline_only=f_bl, classification=c_or_r)
+    #             c += 1
+
+    print("Datasets: ", c)
 
 

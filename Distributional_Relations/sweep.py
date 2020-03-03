@@ -54,7 +54,7 @@ for x in sweep:
         x["epochs"] = args.num_epochs
 
 log_name = "log"
-stats_file_name = "stats"
+stats_file_name = "stats_old"
 path = os.getcwd()
 
 # Whether to run or just evaluate
