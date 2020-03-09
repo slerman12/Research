@@ -336,26 +336,26 @@ with tf.Session() as sess:
     #         bla3 = h_statistic(bla2, interaction)
     #         print('"{}": {},'.format(str(interaction), bla3))
 
-    max_unique_value_size = 120
+    max_unique_value_size = 50
 
     # group_interaction = ['Blood_Chemistry_And_Hematology_Labs', 'Function']
-    interactions = list(itertools.product(groups[group_interaction[0]], groups[group_interaction[1]]))
-    for interaction in interactions:
-        if interaction[0] != interaction[1]:
-            interaction = list(interaction)
-            # bla = {str(sub): add_to_cache(partial_dependency_inputs(d, sub, max_unique_value_size), str(sub), "inputs") if str(sub) not in cache["inputs"] else cache["inputs"][str(sub)] for sub in sublists(interaction)}
-            bla = {str(sub): partial_dependency_inputs(d, sub, max_unique_value_size) for sub in sublists(interaction)}
-            # bla2 = {str(sub): add_to_cache(partial_dependence(model, bla[str(sub)], sub), str(sub), "pd") if str(sub) not in cache["pd"] else cache["pd"][str(sub)] for sub in sublists(interaction)}
-            bla2 = {str(sub_f): partial_dependence(model, bla[str(sub_f)], sub_f) for sub_f in sublists(interaction)}
-            bla3 = h_statistic(bla2, interaction)
-            write_output += '"{}": {},\n'.format(str(interaction), bla3)
-            print('"{}": {},'.format(str(interaction), bla3))
+    # interactions = list(itertools.product(groups[group_interaction[0]], groups[group_interaction[1]]))
+    # for interaction in interactions:
+    #     if interaction[0] != interaction[1]:
+    #         interaction = list(interaction)
+    #         # bla = {str(sub): add_to_cache(partial_dependency_inputs(d, sub, max_unique_value_size), str(sub), "inputs") if str(sub) not in cache["inputs"] else cache["inputs"][str(sub)] for sub in sublists(interaction)}
+    #         bla = {str(sub): partial_dependency_inputs(d, sub, max_unique_value_size) for sub in sublists(interaction)}
+    #         # bla2 = {str(sub): add_to_cache(partial_dependence(model, bla[str(sub)], sub), str(sub), "pd") if str(sub) not in cache["pd"] else cache["pd"][str(sub)] for sub in sublists(interaction)}
+    #         bla2 = {str(sub_f): partial_dependence(model, bla[str(sub_f)], sub_f) for sub_f in sublists(interaction)}
+    #         bla3 = h_statistic(bla2, interaction)
+    #         write_output += '"{}": {},\n'.format(str(interaction), bla3)
+    #         print('"{}": {},'.format(str(interaction), bla3))
 
-    write_output += '}'
-    ## write_output = write_output[:-1] + '}'
-    print('}')
-    with open("feature_interactions", "w") as file:
-        file.write(write_output)
+    # write_output += '}'
+    # ## write_output = write_output[:-1] + '}'
+    # print('}')
+    # with open("feature_interactions", "w") as file:
+    #     file.write(write_output)
 
     def graph(stats):
         fig = make_subplots(rows=1, cols=2,
