@@ -183,10 +183,10 @@ def main():
                         diff_obs_new = obs_new_resized - obs_resized
 
                         #Bellman double Q
-                        Q = model.predict(diff_obs[np.newaxis,:])          # Q-values predictions
+                        Q = model.compute_interaction_effects(diff_obs[np.newaxis, :])          # Q-values predictions
 
-                        Q_ = model.predict(diff_obs_new[np.newaxis,:])
-                        Q_target = target_model.predict(diff_obs_new[np.newaxis,:])
+                        Q_ = model.compute_interaction_effects(diff_obs_new[np.newaxis, :])
+                        Q_target = target_model.compute_interaction_effects(diff_obs_new[np.newaxis, :])
 
                         target_ = copy.copy(Q)
 
@@ -197,7 +197,7 @@ def main():
 
                         distance_from_target = mean_squared_error(Q, target_)
                     else:
-                        Q = model.predict(diff_obs[np.newaxis,:])          # Q-values predictions
+                        Q = model.compute_interaction_effects(diff_obs[np.newaxis, :])          # Q-values predictions
 
                         action = np.argmax(Q)
 
@@ -211,8 +211,8 @@ def main():
                         diff_obs_new = obs_new_resized - obs_resized
 
                         #Bellman double Q
-                        Q_ = model.predict(diff_obs_new[np.newaxis,:])
-                        Q_target = target_model.predict(diff_obs_new[np.newaxis,:])
+                        Q_ = model.compute_interaction_effects(diff_obs_new[np.newaxis, :])
+                        Q_target = target_model.compute_interaction_effects(diff_obs_new[np.newaxis, :])
 
                         target_ = copy.copy(Q)
 
@@ -301,9 +301,9 @@ def main():
 
                         #Bellman double Q
                         inputs[i] = diff_obs[np.newaxis,:]
-                        Q = model.predict(diff_obs[np.newaxis,:])
-                        Q_ = model.predict(diff_obs_new[np.newaxis,:])
-                        Q_target = target_model.predict(diff_obs_new[np.newaxis,:])
+                        Q = model.compute_interaction_effects(diff_obs[np.newaxis, :])
+                        Q_ = model.compute_interaction_effects(diff_obs_new[np.newaxis, :])
+                        Q_target = target_model.compute_interaction_effects(diff_obs_new[np.newaxis, :])
 
                         targets[i] = copy.copy(Q)
 
