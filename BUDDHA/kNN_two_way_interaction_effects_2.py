@@ -102,7 +102,7 @@ def compute_two_way_interaction_effect(_interaction):
     # return max((dx_0_full - dx_0_partial)**2, (dx_1_full - dx_1_partial)**2)
 
 
-samples = 5
+samples = 100
 
 feature_indices = list(range(len(X[0])))
 two_way_interaction_effects = []
@@ -117,12 +117,8 @@ for sample in range(samples):
     else:
         two_way_interaction_effects += np.array(two_way_interaction_effects_running)
 
-    temp = X[-1]
-    X[-1] = X[0]
-    X[0] = temp
-    temp = y[-1]
-    y[-1] = y[0]
-    y[0] = temp
+    X = np.roll(X, 1, 0)
+    y = np.roll(y, 1, 0)
 
 
 def rank(inputs):

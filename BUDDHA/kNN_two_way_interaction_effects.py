@@ -73,7 +73,7 @@ def compute_predictiveness(_interaction):
 
 
 feature_indices = np.array(list(range(len(X[0]))))
-samples = 1000
+samples = 100
 
 for sample in range(samples):
     predicted_interaction_effects = [None for _ in range(order)]
@@ -114,12 +114,8 @@ for sample in range(samples):
             predicted_interaction_effects[o] = np.array(predicted_interaction_effects_running[o])
         else:
             predicted_interaction_effects[o] += np.array(predicted_interaction_effects_running[o])
-    temp = X[-1]
-    X[-1] = X[0]
-    X[0] = temp
-    temp = y[-1]
-    y[-1] = y[0]
-    y[0] = temp
+    X = np.roll(X, 1, 0)
+    y = np.roll(y, 1, 0)
 
 
 def rank(inputs):
@@ -138,9 +134,11 @@ print((np.array(interaction_effects[1]) - np.array(interaction_effects[1]).min(0
 print()
 print(rank(predicted_interaction_effects_running[1]))
 print(rank(interaction_effects[1]))
+print(np.linalg.norm(np.array(rank(predicted_interaction_effects_running[1])) - np.array(rank(interaction_effects[1]))))
 print()
 print(rank(predicted_interaction_effects_running[0]))
 print(rank(interaction_effects[0]))
+print(np.linalg.norm(np.array(rank(predicted_interaction_effects_running[0])) - np.array(rank(interaction_effects[0]))))
 
 
 # print(np.argsort(predicted_interaction_effects[1]) ** 2 - np.argsort(interaction_effects[1]) ** 2)
