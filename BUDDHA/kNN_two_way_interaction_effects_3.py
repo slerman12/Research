@@ -7,13 +7,12 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
-class kNN_interaction_effects(object):
-    def __init__(self, x, y, k, weighted=False):
-        assert (k <= len(x)), "k cannot be greater than training_set length"
-        self.__x = x
-        self.__y = y
+class KNNInteractionEffects(object):
+    def __init__(self, _X, _y, k):
+        assert (k <= len(_X)), "k cannot be greater than training_set length"
+        self.__X = _X.copy()
+        self.__y = _y.copy()
         self.__k = k
-        self.__weighted = weighted
 
     @staticmethod
     def euclidean_distance(a, b):
@@ -21,50 +20,44 @@ class kNN_interaction_effects(object):
 
     @staticmethod
     def gaussian(dist, sigma=1):
-        return 1. / (math.sqrt(2. * math.pi) * sigma) * math.exp(-dist ** 2/(2 * sigma ** 2))
+        return 1. / (math.sqrt(2. * math.pi) * sigma) * math.exp(-dist ** 2 / (2 * sigma ** 2))
 
-    def compute_interaction_effects(self, test_set, interaction=None):
-        predictions = []
-        for t in test_set:
-            distances = []
-            for idx, d in enumerate(self.__x):
-                dist = self.euclidean_distance(t, d)
-                distances.append((self.__y[idx], dist, t[interaction[0]] > d[interaction[0]], t[interaction[1]] > d[interaction[1]],
-                                  d[interaction[0]] - t[interaction[0]], d[interaction[1]] - t[interaction[1]]))
-            distances.sort(key=operator.itemgetter(1))
-            upper_0_upper_1 = 0
-            upper_0_lower_1 = 0
-            lower_0_upper_1 = 0
-            lower_0_lower_1 = 0
-            total_upper_0_upper_1_weight = 0
-            total_upper_0_lower_1_weight = 0
-            total_lower_0_upper_1_weight = 0
-            total_lower_0_lower_1_weight = 0
-            for i in range(self.__k):
-                weight = self.gaussian(distances[i][1])
-                # weight = 1.0 / (distances[i][1] + 0.1)
-                if distances[i][2]:
-                    if distances[i][3]:
-                        upper_0_upper_1 += distances[i][0]*weight
-                        total_upper_0_upper_1_weight += weight
+    def compute_interaction_effects(self, x, _order=2, _interactions=None):
+        feature_indices = list(range(len(self.__X[0])))
+        _interactions = list(combinations(feature_indices, 2)) if _interactions is None else _interactions
+        _interactions_length = len(_interactions)
+
+        upper_lowers = np.zeros((_interactions_length, 2, 2))
+        total_upper_lowers_weights = np.zeros((_interactions_length, 2, 2))
+
+        distances = []
+        for idx, d in enumerate(self.__X):
+            dist = self.euclidean_distance(x, d)
+            distances.append((self.__y[idx], dist, d - x))
+        distances.sort(key=operator.itemgetter(1))
+
+        for i in range(self.__k):
+            weight = self.gaussian(distances[i][1])
+
+            for j, _interaction in enumerate(_interactions):
+                if distances[i][2][_interaction[0]] < 0:
+                    if distances[i][2][_interaction[1]] < 0:
+                        upper_lowers[j, 0, 0] += distances[i][0] * weight
+                        total_upper_lowers_weights[j, 0, 0] += weight
                     else:
-                        upper_0_lower_1 += distances[i][0]*weight
-                        total_upper_0_lower_1_weight += weight
+                        upper_lowers[j, 0, 1] += distances[i][0] * weight
+                        total_upper_lowers_weights[j, 0, 1] += weight
                 else:
-                    if distances[i][3]:
-                        lower_0_upper_1 += distances[i][0]*weight
-                        total_lower_0_upper_1_weight += weight
+                    if distances[i][2][_interaction[1]] < 0:
+                        upper_lowers[j, 1, 0] += distances[i][0] * weight
+                        total_upper_lowers_weights[j, 1, 0] += weight
                     else:
-                        lower_0_lower_1 += distances[i][0]*weight
-                        total_lower_0_lower_1_weight += weight
-            total_upper_0_upper_1_weight = 1 if total_upper_0_upper_1_weight == 0 else total_upper_0_upper_1_weight
-            total_upper_0_lower_1_weight = 1 if total_upper_0_lower_1_weight == 0 else total_upper_0_lower_1_weight
-            total_lower_0_upper_1_weight = 1 if total_lower_0_upper_1_weight == 0 else total_lower_0_upper_1_weight
-            total_lower_0_lower_1_weight = 1 if total_lower_0_lower_1_weight == 0 else total_lower_0_lower_1_weight
-            preds = [[upper_0_upper_1 / total_upper_0_upper_1_weight, upper_0_lower_1 / total_upper_0_lower_1_weight],
-                     [lower_0_upper_1 / total_lower_0_upper_1_weight, lower_0_lower_1 / total_lower_0_lower_1_weight]]
-            predictions.append(abs((preds[0][0] - preds[1][0]) - (preds[0][1] - preds[1][1])))
-        return predictions
+                        upper_lowers[j, 1, 1] += distances[i][0] * weight
+                        total_upper_lowers_weights[j, 1, 1] += weight
+        total_upper_lowers_weights[total_upper_lowers_weights == 0] = 1
+        upper_lowers /= total_upper_lowers_weights
+
+        return np.abs((upper_lowers[:, 0, 0] - upper_lowers[:, 1, 0]) - (upper_lowers[:, 0, 1] - upper_lowers[:, 1, 1]))
 
 
 def _linear_regression_two_way_interaction_effects(_x, _y):
@@ -75,29 +68,6 @@ def _linear_regression_two_way_interaction_effects(_x, _y):
                                           _x_plus_interaction_terms[:, _interaction[1]]]
     _model = LinearRegression(fit_intercept=False).fit(_x_plus_interaction_terms, _y)
     return _model.coef_[len(_x[0]):]
-
-
-def compute_two_way_interaction_effects(_X, _y, _samples):
-    _X = _X.copy()
-    _y = _y.copy()
-    feature_indices = list(range(len(_X[0])))
-    result = []
-    for sample in range(_samples):
-        two_way_interaction_effects_running = []
-
-        for two_way_interaction in combinations(feature_indices, 2):
-            model = kNN_interaction_effects(np.array(_X[1:]), _y[1:], 4999, True)
-            predicted_interaction_effect = model.compute_interaction_effects(np.array([_X[0]]),
-                                                                             interaction=two_way_interaction)[0]
-            two_way_interaction_effects_running.append(predicted_interaction_effect)
-
-        if len(result) == 0:
-            result = np.array(two_way_interaction_effects_running)
-        else:
-            result += np.array(two_way_interaction_effects_running)
-        _X = np.roll(_X, 1, 0)
-        _y = np.roll(_y, 1, 0)
-    return result / samples
 
 
 def rank_sequentially(inputs):
@@ -149,10 +119,14 @@ with open(data_path + "/interaction_effects") as f:
 X = np.array(X)
 X = (X - X.min(0)) / X.ptp(0)
 
-# Two way interaction effects
-two_way_interaction_effects = compute_two_way_interaction_effects(X, y, samples)
-print_results(two_way_interaction_effects, interaction_effects[1])
-
 # Linear regression two way interaction effects
 lin_reg_preds = _linear_regression_two_way_interaction_effects(X, y)
 print_results(lin_reg_preds, interaction_effects[1])
+
+# Two way interaction effects
+two_way_interaction_effects = []
+for sample in range(samples):
+    model = KNNInteractionEffects(np.roll(X, sample, 0)[1:], np.roll(y, sample, 0)[1:], 4999)
+    two_way_interaction_effects.append(model.compute_interaction_effects(X[sample]))
+two_way_interaction_effects = np.mean(two_way_interaction_effects, 0)
+print_results(two_way_interaction_effects, interaction_effects[1])
