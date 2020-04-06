@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 import json
 import math
-import operator
 import time
 from itertools import combinations
 import numpy as np
 from sklearn.linear_model import LinearRegression
+from sklearn.metrics import roc_auc_score
 
 
 class NearestNeighborsInteractionEffects(object):
@@ -100,41 +100,88 @@ def print_results(pred, true):
     print()
 
 
-# Hyper-parameters
-order = 2
+def AUC(pred, true, X):
+    predicted = scale_to_0_1(pred)
+    print("predicted IE: ", predicted)
+    predicted_ranked_sequentially = rank_sequentially(pred)
+    print("predicted IE ranked: ", predicted_ranked_sequentially)
 
-# Load data
-data_path = "data/synthetic_data/synthetic_data_size_5000_input_dimension_5_num_orders_2_multiplicative_interactions_noise_0"
-with open(data_path + "/X") as f:
-    X = json.load(f)
-with open(data_path + "/y") as f:
-    y = json.load(f)
-with open(data_path + "/interaction_effects") as f:
-    interaction_effects = json.load(f)
+    true = [sorted(i) for i in true]
 
-# Data normalization
-X = np.array(X)
-X = (X - X.min(0)) / X.ptp(0)
+    top_pred = np.argsort(pred)[-len(true):]
 
-# Linear regression two way interaction effects
-lin_reg_preds = _linear_regression_two_way_interaction_effects(X, y)
-print_results(lin_reg_preds, interaction_effects[1])
+    predicted_interactions = []
+    ground_truth_interactions = []
 
-# Two way interaction effects
-two_way_interaction_effects = []
+    _feature_indices = list(range(len(X[0])))
+    for i, _interaction in enumerate(list(combinations(_feature_indices, 2))):
+        if i in top_pred:
+            predicted_interactions.append(1)
+        else:
+            predicted_interactions.append(0)
+        if sorted(_interaction) in true:
+            ground_truth_interactions.append(1)
+        else:
+            ground_truth_interactions.append(0)
+        print("Interaction: {}, Predicted: {}, Ranking: {}".format(_interaction, predicted[i], predicted_ranked_sequentially[i]))
 
-# With sampling
-# samples = 100
-# for sample in range(samples):
-#     model = KNNInteractionEffects(np.roll(X, sample, 0)[1:], np.roll(y, sample, 0)[1:])
-#     two_way_interaction_effects.append(model.compute_interaction_effects(X[-sample]))
-# two_way_interaction_effects = [np.mean(two_way_interaction_effects, 0)]
-# print_results(two_way_interaction_effects[0], interaction_effects[1])
+    score = roc_auc_score(ground_truth_interactions, predicted_interactions)
+    print("AUC score: ", score)
 
-# Efficient two way interaction effects from median & mean!
-# two_way_interaction_effects = []
-model = NearestNeighborsInteractionEffects(X, y)
-two_way_interaction_effects.append(model.compute_interaction_effects(np.median(X, 0)))
-two_way_interaction_effects.append(model.compute_interaction_effects(np.mean(X, 0)))
-two_way_interaction_effects = np.mean(two_way_interaction_effects, 0)
-print_results(two_way_interaction_effects, interaction_effects[1])
+    return score
+
+
+def run(num):
+    # Hyper-parameters
+    order = 2
+
+    # Load data
+    data_path = "data/synthetic_data/synthetic_data_f_1"
+    with open(data_path + "/X") as f:
+        X = json.load(f)
+    with open(data_path + "/y") as f:
+        y = json.load(f)
+
+    # Ground truths
+    f_1_ground_truth = [(0, 1), (0, 2), (1, 2), (2, 4), (8, 9), (8, 6), (8, 7), (9, 6), (9, 7), (6, 7), (1, 6)]
+    f_2_ground_truth = [(0, 1), (0, 2), (1, 2), (2, 4), (8, 9), (8, 6), (8, 7), (9, 6), (9, 7), (6, 7), (1, 6)]
+    f_3_ground_truth = [(0, 1), (1, 2), (2, 3), (3, 4), (3, 6), (3, 7), (4, 6), (4, 7), (6, 7)]
+    f_4_ground_truth = []
+    f_5_ground_truth = []
+    f_6_ground_truth = []
+    f_7_ground_truth = []
+    f_8_ground_truth = []
+    f_9_ground_truth = []
+    f_10_ground_truth = []
+
+    # Data normalization
+    X = np.array(X)
+    X = (X - X.min(0)) / X.ptp(0)
+
+    # Linear regression two way interaction effects
+    lin_reg_preds = _linear_regression_two_way_interaction_effects(X, y)
+    LR_score = AUC(lin_reg_preds, locals()["f_{}_ground_truth".format(num + 1)], X)
+
+    # Two way interaction effects
+    two_way_interaction_effects = []
+
+    # With sampling
+    # samples = 100
+    # for sample in range(samples):
+    #     model = NearestNeighborsInteractionEffects(np.roll(X, sample, 0)[1:], np.roll(y, sample, 0)[1:])
+    #     two_way_interaction_effects.append(model.compute_interaction_effects(X[-sample]))
+    # two_way_interaction_effects = [np.mean(two_way_interaction_effects, 0)]
+    # AUC(two_way_interaction_effects[0], f_1_ground_truth)
+
+    # Efficient two way interaction effects from median & mean!
+    # two_way_interaction_effects = []
+    model = NearestNeighborsInteractionEffects(X, y)
+    two_way_interaction_effects.append(model.compute_interaction_effects(np.median(X, 0)))
+    two_way_interaction_effects.append(model.compute_interaction_effects(np.mean(X, 0)))
+    two_way_interaction_effects = np.mean(two_way_interaction_effects, 0)
+    kNN_score = AUC(two_way_interaction_effects, locals()["f_{}_ground_truth".format(num + 1)], X)
+
+    return LR_score, kNN_score
+
+
+# run(1)
